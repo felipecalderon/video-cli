@@ -11,19 +11,19 @@
 
 ## Semana 2 — Motor perceptual inicial
 
-- [ ] Separación de canales RGB
-- [ ] Cuantización básica por canal
-- [ ] Implementación de dithering simple (Bayer)
-- [ ] Soporte para caracteres Unicode (`▀`, `▄`)
+- [x] Separación de canales RGB
+- [x] Cuantización básica por canal
+- [x] Implementación de dithering simple (Bayer)
+- [x] Soporte para caracteres Unicode (`▀`, `▄`)
 
 ---
 
 ## Semana 3 — Optimización
 
-- [ ] Diff rendering (solo cambios)
-- [ ] Buffer doble (double buffering)
+- [x] Diff rendering (solo cambios)
+- [x] Buffer doble (double buffering)
 - [ ] Ajuste de FPS estable
-- [ ] Optimización de escritura a stdout
+- [x] Optimización de escritura a stdout
 
 ---
 

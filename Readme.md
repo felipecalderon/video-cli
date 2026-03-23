@@ -1,6 +1,6 @@
-# 📦 README — Motor Perceptual Adaptativo para Terminal
+# Motor Perceptual Adaptativo para Terminal
 
-## 🧠 Descripción
+## Descripción
 
 **Motor perceptual adaptativo** es una librería diseñada para renderizar contenido visual (imágenes/video) en terminales, maximizando la calidad percibida mediante técnicas inspiradas en sistemas de visualización antiguos (CRT) y limitaciones modernas de terminal.
 
@@ -13,7 +13,7 @@ En lugar de representar píxeles reales, el motor:
 
 ---
 
-## 🎯 Objetivo del MVP (1 mes)
+## Objetivo del MVP (1 mes)
 
 Lograr reproducir un video corto en terminal con:
 
@@ -27,19 +27,27 @@ Lograr reproducir un video corto en terminal con:
 
 ---
 
-## ⚙️ Características clave
+## Estado actual
 
-- 🎨 Render perceptual (no pixel-perfect)
-- 🔴🟢🔵 Separación de canales RGB
-- 🧩 Subdivisión de celdas con Unicode
-- 🌫️ Dithering espacial adaptativo
-- ⏳ Persistencia temporal (simulación CRT)
-- ⚡ Render incremental (diff-based)
-- 📐 Escalado dinámico según tamaño de terminal
+- Semana 1: base funcional completa
+- Semana 2: motor perceptual inicial completo
+- Semana 3: diff rendering completo, buffer doble y pacing en progreso
 
 ---
 
-## 🧱 Arquitectura (alto nivel)
+## Características clave
+
+- Render perceptual (no pixel-perfect)
+- Separación de canales RGB
+- Subdivisión de celdas con Unicode
+- Dithering espacial adaptativo
+- Persistencia temporal (simulación CRT)
+- Render incremental (diff-based)
+- Escalado dinámico según tamaño de terminal
+
+---
+
+## Arquitectura (alto nivel)
 
 ```
 Video Input (FFmpeg)
@@ -63,7 +71,7 @@ Terminal output
 
 ---
 
-## 🛠️ Stack sugerido
+## Stack sugerido
 
 - **Core**: Go (concurrencia + performance)
 - **Decodificación**: FFmpeg
@@ -72,15 +80,21 @@ Terminal output
 
 ---
 
-## 🧪 Ejemplo de uso (conceptual)
+## Ejemplo de uso (conceptual)
 
 ```bash
-cat video.mp4 | perceptual-terminal --mode=crt --fps=15
+go run ./cmd/player --input .\test.mp4 --fps 15 --color auto --preset fast
+```
+
+Si tu FFmpeg no está en el PATH:
+
+```bash
+go run ./cmd/player --input .\test.mp4 --fps 15 --color auto --preset fast --ffmpeg C:\ffmpeg\bin\ffmpeg.exe --ffprobe C:\ffmpeg\bin\ffprobe.exe
 ```
 
 ---
 
-## 🚧 Limitaciones conocidas
+## Limitaciones conocidas
 
 - Dependencia del rendimiento de stdout
 - Variabilidad entre terminales
