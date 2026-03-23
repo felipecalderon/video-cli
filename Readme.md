@@ -1,0 +1,90 @@
+# 📦 README — Motor Perceptual Adaptativo para Terminal
+
+## 🧠 Descripción
+
+**Motor perceptual adaptativo** es una librería diseñada para renderizar contenido visual (imágenes/video) en terminales, maximizando la calidad percibida mediante técnicas inspiradas en sistemas de visualización antiguos (CRT) y limitaciones modernas de terminal.
+
+En lugar de representar píxeles reales, el motor:
+
+- Optimiza para la **percepción humana**
+- Utiliza **mezcla RGB separada**
+- Aplica **dithering adaptativo por canal**
+- Simula **subpíxeles y persistencia temporal**
+
+---
+
+## 🎯 Objetivo del MVP (1 mes)
+
+Lograr reproducir un video corto en terminal con:
+
+- ≥ 15 FPS estables
+- Uso de color ANSI (idealmente 24-bit)
+- Mejora perceptual frente a render tradicional (ASCII simple)
+- Implementación de al menos:
+  - dithering por canal RGB
+  - uso de caracteres Unicode parciales (`▀`, `▄`)
+  - diff rendering (no redibujar todo)
+
+---
+
+## ⚙️ Características clave
+
+- 🎨 Render perceptual (no pixel-perfect)
+- 🔴🟢🔵 Separación de canales RGB
+- 🧩 Subdivisión de celdas con Unicode
+- 🌫️ Dithering espacial adaptativo
+- ⏳ Persistencia temporal (simulación CRT)
+- ⚡ Render incremental (diff-based)
+- 📐 Escalado dinámico según tamaño de terminal
+
+---
+
+## 🧱 Arquitectura (alto nivel)
+
+```
+Video Input (FFmpeg)
+        ↓
+Frame Buffer (RGB)
+        ↓
+Separación de canales (R, G, B)
+        ↓
+Cuantización adaptativa
+        ↓
+Dithering por canal
+        ↓
+Mapping a caracteres + ANSI
+        ↓
+Buffer de render
+        ↓
+Diff engine
+        ↓
+Terminal output
+```
+
+---
+
+## 🛠️ Stack sugerido
+
+- **Core**: Go (concurrencia + performance)
+- **Decodificación**: FFmpeg
+- **Opcional**: C/C++ para optimizaciones críticas
+- **CLI / tooling**: TypeScript
+
+---
+
+## 🧪 Ejemplo de uso (conceptual)
+
+```bash
+cat video.mp4 | perceptual-terminal --mode=crt --fps=15
+```
+
+---
+
+## 🚧 Limitaciones conocidas
+
+- Dependencia del rendimiento de stdout
+- Variabilidad entre terminales
+- Sin acceso real a subpíxeles
+- Sensibilidad a patrones mal calibrados (ruido visual)
+
+---
