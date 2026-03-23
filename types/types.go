@@ -26,12 +26,13 @@ type CellGrid struct {
 	Cells []Cell // len = W*H
 }
 
-// DiffOp represents a single terminal cell update.
+// DiffOp represents a single terminal update span.
 type DiffOp struct {
 	X, Y int
 	FG   [3]uint8
 	BG   [3]uint8
 	Ch   rune
+	Text string
 }
 
 type ColorMode uint8

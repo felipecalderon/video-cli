@@ -1,19 +1,20 @@
 package render
 
 import (
+	"bufio"
 	"context"
-	"fmt"
 	"io"
+	"strconv"
 	"video-terminal/types"
 )
 
 type ANSIOutput struct {
-	writer    io.Writer
+	writer    *bufio.Writer
 	colorMode types.ColorMode
 }
 
 func NewANSIOutput(w io.Writer, mode types.ColorMode) ANSIOutput {
-	return ANSIOutput{writer: w, colorMode: mode}
+	return ANSIOutput{writer: bufio.NewWriterSize(w, 64*1024), colorMode: mode}
 }
 
 func (o ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
@@ -23,30 +24,52 @@ func (o ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
 		return nil
 	}
 
-	buf := make([]byte, 0, len(ops)*40)
+	buf := make([]byte, 0, len(ops)*48)
 	for _, op := range ops {
-		move := fmt.Sprintf("\x1b[%d;%dH", op.Y+1, op.X+1)
-		buf = append(buf, move...)
+		buf = append(buf, '\x1b', '[')
+		buf = strconv.AppendInt(buf, int64(op.Y+1), 10)
+		buf = append(buf, ';')
+		buf = strconv.AppendInt(buf, int64(op.X+1), 10)
+		buf = append(buf, 'H')
 
 		if o.colorMode == types.Color256 {
 			fg := rgbToANSI256(op.FG)
 			bg := rgbToANSI256(op.BG)
-			color := fmt.Sprintf("\x1b[38;5;%d;48;5;%dm", fg, bg)
-			buf = append(buf, color...)
+			buf = append(buf, '\x1b', '[')
+			buf = append(buf, "38;5;"...)
+			buf = strconv.AppendInt(buf, int64(fg), 10)
+			buf = append(buf, ';', '4', '8', ';', '5', ';')
+			buf = strconv.AppendInt(buf, int64(bg), 10)
+			buf = append(buf, 'm')
 		} else {
-			color := fmt.Sprintf(
-				"\x1b[38;2;%d;%d;%d;48;2;%d;%d;%dm",
-				op.FG[0], op.FG[1], op.FG[2],
-				op.BG[0], op.BG[1], op.BG[2],
-			)
-			buf = append(buf, color...)
+			buf = append(buf, '\x1b', '[')
+			buf = append(buf, "38;2;"...)
+			buf = strconv.AppendInt(buf, int64(op.FG[0]), 10)
+			buf = append(buf, ';')
+			buf = strconv.AppendInt(buf, int64(op.FG[1]), 10)
+			buf = append(buf, ';')
+			buf = strconv.AppendInt(buf, int64(op.FG[2]), 10)
+			buf = append(buf, ';', '4', '8', ';', '2', ';')
+			buf = strconv.AppendInt(buf, int64(op.BG[0]), 10)
+			buf = append(buf, ';')
+			buf = strconv.AppendInt(buf, int64(op.BG[1]), 10)
+			buf = append(buf, ';')
+			buf = strconv.AppendInt(buf, int64(op.BG[2]), 10)
+			buf = append(buf, 'm')
 		}
 
-		buf = appendRuneUTF8(buf, op.Ch)
+		if op.Text != "" {
+			buf = append(buf, op.Text...)
+		} else {
+			buf = appendRuneUTF8(buf, op.Ch)
+		}
 	}
 
-	_, err := o.writer.Write(buf)
-	return err
+	if _, err := o.writer.Write(buf); err != nil {
+		return err
+	}
+
+	return o.writer.Flush()
 }
 
 func rgbToANSI256(c [3]uint8) int {

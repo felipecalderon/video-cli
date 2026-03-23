@@ -69,8 +69,8 @@ func main() {
 	p := pipeline.Pipeline{
 		Decoder:   decoder,
 		Resizer:   render.NearestResizer{},
-		Quantizer: render.NoopQuantizer{},
-		Dither:    render.NoopDither{},
+		Quantizer: render.ChannelQuantizer{},
+		Dither:    render.BayerDither{},
 		Mapper:    render.BlockMapper{},
 		Differ:    diff.ByteDiffer{},
 		Output:    render.NewANSIOutput(os.Stdout, mode),

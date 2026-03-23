@@ -18,6 +18,28 @@ func (ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.Cel
 	ops := make([]types.DiffOp, 0, curr.W*curr.H/4)
 
 	for y := 0; y < curr.H; y++ {
+		rowStart := -1
+		var run types.Cell
+		var runText []rune
+
+		flush := func(endX int) {
+			if rowStart < 0 || len(runText) == 0 {
+				return
+			}
+
+			ops = append(ops, types.DiffOp{
+				X:    rowStart,
+				Y:    y,
+				FG:   run.Top,
+				BG:   run.Bottom,
+				Ch:   run.Ch,
+				Text: string(runText),
+			})
+			rowStart = -1
+			runText = runText[:0]
+			_ = endX
+		}
+
 		for x := 0; x < curr.W; x++ {
 			idx := y*curr.W + x
 			cc := curr.Cells[idx]
@@ -28,16 +50,30 @@ func (ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.Cel
 				changed = cc != pc
 			}
 
-			if changed {
-				ops = append(ops, types.DiffOp{
-					X:  x,
-					Y:  y,
-					FG: cc.Top,
-					BG: cc.Bottom,
-					Ch: cc.Ch,
-				})
+			if !changed {
+				flush(x)
+				continue
 			}
+
+			if rowStart == -1 {
+				rowStart = x
+				run = cc
+				runText = append(runText[:0], cc.Ch)
+				continue
+			}
+
+			if cc.Top == run.Top && cc.Bottom == run.Bottom && cc.Ch == run.Ch && x == rowStart+len(runText) {
+				runText = append(runText, cc.Ch)
+				continue
+			}
+
+			flush(x)
+			rowStart = x
+			run = cc
+			runText = append(runText[:0], cc.Ch)
 		}
+
+		flush(curr.W)
 	}
 
 	return ops, nil

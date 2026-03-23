@@ -30,6 +30,11 @@ type Mapper interface {
 	Map(ctx context.Context, in types.WorkRGB) (types.CellGrid, error)
 }
 
+// MapperInto fills a reusable destination grid to reduce allocations.
+type MapperInto interface {
+	MapInto(ctx context.Context, in types.WorkRGB, dst *types.CellGrid) error
+}
+
 // Differ computes the minimal set of cell updates.
 type Differ interface {
 	Diff(ctx context.Context, curr types.CellGrid, prev *types.CellGrid) ([]types.DiffOp, error)

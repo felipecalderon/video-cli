@@ -11,14 +11,32 @@ const upperHalfBlock = rune(0x2580)
 type BlockMapper struct{}
 
 func (BlockMapper) Map(ctx context.Context, in types.WorkRGB) (types.CellGrid, error) {
+	var grid types.CellGrid
+	if err := (BlockMapper{}).MapInto(ctx, in, &grid); err != nil {
+		return types.CellGrid{}, err
+	}
+	return grid, nil
+}
+
+func (BlockMapper) MapInto(ctx context.Context, in types.WorkRGB, dst *types.CellGrid) error {
 	_ = ctx
 
 	if in.W <= 0 || in.H <= 0 || in.H%2 != 0 || len(in.Pix) < in.Stride*in.H {
-		return types.CellGrid{}, fmt.Errorf("invalid work buffer")
+		return fmt.Errorf("invalid work buffer")
+	}
+	if dst == nil {
+		return fmt.Errorf("nil destination grid")
 	}
 
 	gridH := in.H / 2
-	cells := make([]types.Cell, in.W*gridH)
+	size := in.W * gridH
+	if cap(dst.Cells) < size {
+		dst.Cells = make([]types.Cell, size)
+	} else {
+		dst.Cells = dst.Cells[:size]
+	}
+	dst.W = in.W
+	dst.H = gridH
 
 	for y := 0; y < gridH; y++ {
 		topY := y * 2
@@ -28,7 +46,7 @@ func (BlockMapper) Map(ctx context.Context, in types.WorkRGB) (types.CellGrid, e
 			topIdx := topY*in.Stride + x*3
 			botIdx := botY*in.Stride + x*3
 
-			cells[y*in.W+x] = types.Cell{
+			dst.Cells[y*in.W+x] = types.Cell{
 				Top: [3]uint8{
 					in.Pix[topIdx+0],
 					in.Pix[topIdx+1],
@@ -44,5 +62,5 @@ func (BlockMapper) Map(ctx context.Context, in types.WorkRGB) (types.CellGrid, e
 		}
 	}
 
-	return types.CellGrid{W: in.W, H: gridH, Cells: cells}, nil
+	return nil
 }

@@ -21,6 +21,9 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 	}
 
 	var prev *types.CellGrid
+	var buffers [2]types.CellGrid
+	var currIdx int
+	mapperInto, supportsReuse := p.Mapper.(MapperInto)
 
 	for {
 		select {
@@ -54,9 +57,19 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			return err
 		}
 
-		grid, err := p.Mapper.Map(ctx, dithered)
-		if err != nil {
-			return err
+		var grid types.CellGrid
+		if supportsReuse {
+			curr := &buffers[currIdx]
+			if err := mapperInto.MapInto(ctx, dithered, curr); err != nil {
+				return err
+			}
+			grid = *curr
+		} else {
+			mapped, err := p.Mapper.Map(ctx, dithered)
+			if err != nil {
+				return err
+			}
+			grid = mapped
 		}
 
 		ops, err := p.Differ.Diff(ctx, grid, prev)
@@ -68,8 +81,13 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			return err
 		}
 
-		prevFrame := grid
-		prev = &prevFrame
+		if supportsReuse {
+			prev = &buffers[currIdx]
+			currIdx = 1 - currIdx
+		} else {
+			prevFrame := grid
+			prev = &prevFrame
+		}
 
 		elapsed := time.Since(start)
 		if elapsed < frameDuration {
