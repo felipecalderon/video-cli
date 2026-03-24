@@ -22,7 +22,7 @@
 
 - [x] Diff rendering (solo cambios)
 - [x] Buffer doble (double buffering)
-- [ ] Ajuste de FPS estable
+- [x] Ajuste de FPS estable
 - [x] Optimización de escritura a stdout
 
 ---
@@ -43,3 +43,4 @@
 - [ ] Perfiles visuales (retro, limpio, glitch)
 
 ---
+

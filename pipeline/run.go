@@ -24,6 +24,7 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 	var buffers [2]types.CellGrid
 	var currIdx int
 	mapperInto, supportsReuse := p.Mapper.(MapperInto)
+	nextTick := time.Now().Add(frameDuration)
 
 	for {
 		select {
@@ -47,12 +48,12 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			return err
 		}
 
-		quantized, err := p.Quantizer.Quantize(ctx, work, params.ColorMode)
+		dithered, err := p.Dither.Dither(ctx, work, params.Preset)
 		if err != nil {
 			return err
 		}
 
-		dithered, err := p.Dither.Dither(ctx, quantized, params.Preset)
+		quantized, err := p.Quantizer.Quantize(ctx, dithered, params.ColorMode)
 		if err != nil {
 			return err
 		}
@@ -60,12 +61,12 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		var grid types.CellGrid
 		if supportsReuse {
 			curr := &buffers[currIdx]
-			if err := mapperInto.MapInto(ctx, dithered, curr); err != nil {
+			if err := mapperInto.MapInto(ctx, quantized, curr); err != nil {
 				return err
 			}
 			grid = *curr
 		} else {
-			mapped, err := p.Mapper.Map(ctx, dithered)
+			mapped, err := p.Mapper.Map(ctx, quantized)
 			if err != nil {
 				return err
 			}
@@ -90,12 +91,23 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		}
 
 		elapsed := time.Since(start)
+		targetTick := nextTick
+		nextTick = nextTick.Add(frameDuration)
+
 		if elapsed < frameDuration {
-			select {
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-time.After(frameDuration - elapsed):
+			sleep := time.Until(targetTick)
+			if sleep > 0 {
+				timer := time.NewTimer(sleep)
+				select {
+				case <-ctx.Done():
+					timer.Stop()
+					return ctx.Err()
+				case <-timer.C:
+				}
 			}
+		} else if time.Since(targetTick) > frameDuration {
+
+			nextTick = time.Now().Add(frameDuration)
 		}
 	}
 }

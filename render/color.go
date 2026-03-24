@@ -61,5 +61,5 @@ func ditherChannel(c uint8, threshold uint8, area int) uint8 {
 		value = 255
 	}
 
-	return quantizeChannel(uint8(value), quantizeTruecolorLevels)
+	return uint8(value)
 }
