@@ -102,6 +102,7 @@ type playerConfig struct {
 	Scale      *float64 `json:"scale"`
 	TermWidth  *int     `json:"term_width"`
 	TermHeight *int     `json:"term_height"`
+	BlendAlpha *float64 `json:"blend_alpha"`
 }
 
 func loadConfig(path string) (playerConfig, error) {
@@ -150,6 +151,11 @@ func validateConfig(cfg *playerConfig) error {
 	if cfg.TermHeight != nil && *cfg.TermHeight <= 0 {
 		return fmt.Errorf("config term_height must be > 0")
 	}
+	if cfg.BlendAlpha != nil {
+		if *cfg.BlendAlpha < 0 || *cfg.BlendAlpha > 1 {
+			return fmt.Errorf("config blend_alpha must be between 0 and 1")
+		}
+	}
 	if cfg.Preset != nil {
 		v := strings.ToLower(strings.TrimSpace(*cfg.Preset))
 		if !isValidPreset(v) {
@@ -178,6 +184,8 @@ func main() {
 	scale := 1.0
 	termWOverride := 0
 	termHOverride := 0
+	blendAlpha := 0.0
+	blendAlphaSet := false
 
 	fpsFlag := intFlag{v: &fps}
 	colorFlag := stringFlag{v: &color}
@@ -185,6 +193,7 @@ func main() {
 	scaleFlag := floatFlag{v: &scale}
 	termWFlag := intFlag{v: &termWOverride}
 	termHFlag := intFlag{v: &termHOverride}
+	blendAlphaFlag := floatFlag{v: &blendAlpha}
 
 	flag.Var(&fpsFlag, "fps", "Target FPS")
 	flag.Var(&colorFlag, "color", "Color mode: auto|truecolor|256")
@@ -192,6 +201,7 @@ func main() {
 	flag.Var(&scaleFlag, "scale", "Scale multiplier for detected terminal size (e.g. 0.8)")
 	flag.Var(&termWFlag, "term-width", "Override terminal width (columns)")
 	flag.Var(&termHFlag, "term-height", "Override terminal height (rows)")
+	flag.Var(&blendAlphaFlag, "blend-alpha", "Temporal blend alpha (0..1)")
 
 	ffmpegPath := flag.String("ffmpeg", "", "Path to ffmpeg binary")
 	ffprobePath := flag.String("ffprobe", "", "Path to ffprobe binary")
@@ -233,6 +243,10 @@ func main() {
 	if cfg.TermHeight != nil {
 		termHOverride = *cfg.TermHeight
 	}
+	if cfg.BlendAlpha != nil {
+		blendAlpha = *cfg.BlendAlpha
+		blendAlphaSet = true
+	}
 
 	if fpsFlag.set {
 		fps = *fpsFlag.v
@@ -252,6 +266,10 @@ func main() {
 	if termHFlag.set {
 		termHOverride = *termHFlag.v
 	}
+	if blendAlphaFlag.set {
+		blendAlpha = *blendAlphaFlag.v
+		blendAlphaSet = true
+	}
 
 	if fps <= 0 {
 		slog.Error("invalid fps (must be > 0)")
@@ -267,6 +285,13 @@ func main() {
 	}
 	if !isValidColor(color) {
 		slog.Error("invalid color", "value", color)
+		os.Exit(2)
+	}
+	if !blendAlphaSet {
+		blendAlpha = defaultBlendForPreset(preset)
+	}
+	if blendAlpha < 0 || blendAlpha > 1 {
+		slog.Error("invalid blend-alpha (must be 0..1)")
 		os.Exit(2)
 	}
 
@@ -335,17 +360,19 @@ func main() {
 		Resizer:   render.NearestResizer{},
 		Quantizer: render.ChannelQuantizer{},
 		Dither:    render.BayerDither{},
+		Temporal:  &render.TemporalBlend{},
 		Mapper:    render.BlockMapper{},
 		Differ:    diff.ByteDiffer{},
 		Output:    render.NewANSIOutput(os.Stdout, mode),
 	}
 
 	params := types.PipelineParams{
-		TermW:     termW,
-		TermH:     termH,
-		FpsTarget: fps,
-		ColorMode: mode,
-		Preset:    parsePreset(preset),
+		TermW:      termW,
+		TermH:      termH,
+		FpsTarget:  fps,
+		ColorMode:  mode,
+		Preset:     parsePreset(preset),
+		BlendAlpha: blendAlpha,
 	}
 
 	if err := p.Run(ctx, params); err != nil && !errors.Is(err, context.Canceled) {
@@ -385,6 +412,17 @@ func printBinaryHelp(name string, err error, explicitPath string) {
 	}
 	fmt.Fprintln(os.Stderr, "Ejemplo:")
 	fmt.Fprintf(os.Stderr, "  go run ./cmd/player --input .\\test.mp4 --%s C:\\ffmpeg\\bin\\%s.exe\n", name, name)
+}
+
+func defaultBlendForPreset(v string) float64 {
+	switch strings.ToLower(strings.TrimSpace(v)) {
+	case "quality":
+		return 0.18
+	case "crt":
+		return 0.30
+	default:
+		return 0
+	}
 }
 
 func parsePreset(v string) types.Preset {

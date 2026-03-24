@@ -52,4 +52,5 @@ type PipelineParams struct {
 	FpsTarget    int
 	ColorMode    ColorMode
 	Preset       Preset
+	BlendAlpha   float64
 }

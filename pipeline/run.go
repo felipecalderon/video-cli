@@ -48,6 +48,14 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			return err
 		}
 
+		if p.Temporal != nil && params.BlendAlpha > 0 {
+			blended, err := p.Temporal.Blend(ctx, work, params.BlendAlpha)
+			if err != nil {
+				return err
+			}
+			work = blended
+		}
+
 		dithered, err := p.Dither.Dither(ctx, work, params.Preset)
 		if err != nil {
 			return err

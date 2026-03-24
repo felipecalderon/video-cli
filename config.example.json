@@ -4,5 +4,6 @@
   "color": "truecolor",
   "scale": 1,
   "term_width": 300,
-  "term_height": 100
+  "term_height": 100,
+  "blend_alpha": 0.18
 }

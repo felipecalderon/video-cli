@@ -29,7 +29,7 @@
 
 ## Semana 4 — Magia perceptual
 
-- [ ] Persistencia temporal (frame blending)
+- [x] Persistencia temporal (frame blending)
 - [ ] Ajuste dinámico de dithering
 - [ ] Simulación de scanlines
 - [ ] Modo “CRT”
@@ -43,4 +43,3 @@
 - [ ] Perfiles visuales (retro, limpio, glitch)
 
 ---
-

@@ -41,6 +41,14 @@ func (NoopDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Pre
 	return in, ErrNotImplemented
 }
 
+type NoopTemporal struct{}
+
+func (NoopTemporal) Blend(ctx context.Context, in types.WorkRGB, alpha float64) (types.WorkRGB, error) {
+	_ = ctx
+	_ = alpha
+	return in, ErrNotImplemented
+}
+
 type BlockMapper struct{}
 
 func (BlockMapper) Map(ctx context.Context, in types.WorkRGB) (types.CellGrid, error) {

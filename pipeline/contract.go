@@ -21,6 +21,10 @@ type Dither interface {
 	Dither(ctx context.Context, in types.WorkRGB, preset types.Preset) (types.WorkRGB, error)
 }
 
+type Temporal interface {
+	Blend(ctx context.Context, in types.WorkRGB, alpha float64) (types.WorkRGB, error)
+}
+
 type Mapper interface {
 	Map(ctx context.Context, in types.WorkRGB) (types.CellGrid, error)
 }
@@ -42,6 +46,7 @@ type Pipeline struct {
 	Resizer   Resizer
 	Quantizer Quantizer
 	Dither    Dither
+	Temporal  Temporal
 	Mapper    Mapper
 	Differ    Differ
 	Output    Output
