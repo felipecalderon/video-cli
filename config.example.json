@@ -1,0 +1,8 @@
+{
+  "fps": 30,
+  "preset": "quality",
+  "color": "truecolor",
+  "scale": 1,
+  "term_width": 300,
+  "term_height": 100
+}

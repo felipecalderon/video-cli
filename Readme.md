@@ -94,6 +94,49 @@ go run ./cmd/player --input .\test.mp4 --fps 15 --color auto --preset fast --ffm
 
 ---
 
+
+## Configuración (JSON)
+
+Puedes usar un archivo de configuración y sobreescribirlo desde CLI.
+
+Ejemplo (`config.json`):
+
+```json
+{
+  "fps": 15,
+  "preset": "quality",
+  "color": "truecolor",
+  "scale": 1.0,
+  "term_width": 160,
+  "term_height": 45
+}
+```
+
+Uso:
+
+```bash
+go run ./cmd/player --input .\test.mp4 --config .\config.example.json
+```
+
+Campos soportados:
+- `fps`
+- `preset` (`fast` | `quality` | `crt`)
+- `color` (`auto` | `truecolor` | `256`)
+- `scale` (multiplica el tamaño detectado del terminal)
+- `term_width` (ancho en columnas)
+- `term_height` (alto en filas)
+
+Prioridad: CLI sobrescribe configuración. Si no pasas --config, se carga ./config.json si existe.
+Validación estricta: campos desconocidos o valores inválidos generan error.
+
+Flags CLI útiles:
+- `--config` (ruta a JSON)
+- `--fps` (FPS objetivo)
+- `--preset` (`fast` | `quality` | `crt`)
+- `--color` (`auto` | `truecolor` | `256`)
+- `--scale` (multiplica tamaño detectado)
+- `--term-width` (ancho en columnas)
+- `--term-height` (alto en filas)
 ## Limitaciones conocidas
 
 - Dependencia del rendimiento de stdout
@@ -102,3 +145,12 @@ go run ./cmd/player --input .\test.mp4 --fps 15 --color auto --preset fast --ffm
 - Sensibilidad a patrones mal calibrados (ruido visual)
 
 ---
+
+
+
+
+
+
+
+
+

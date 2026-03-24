@@ -1,6 +1,11 @@
+# build
 bin/
 dist/
 *.exe
 *.out
 *.test
 coverage.out
+
+# local config & media
+config.json
+test.mp4
