@@ -8,8 +8,6 @@ import (
 
 var ErrNotImplemented = errors.New("not implemented")
 
-// Stub implementations to allow wiring without logic.
-
 type NullDecoder struct{}
 
 func (NullDecoder) Next(ctx context.Context) (types.FrameRGB, error) {

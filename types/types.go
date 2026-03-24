@@ -1,14 +1,11 @@
 package types
 
-// RGB interleaved, sRGB 8-bit
 type FrameRGB struct {
 	W, H   int
-	Stride int // bytes per row, >= W*3
+	Stride int
 	Pix    []uint8
 }
 
-// Work buffer already resized to terminal resolution.
-// H = termH*2 when using upper/lower half blocks.
 type WorkRGB struct {
 	W, H   int
 	Stride int
@@ -18,15 +15,14 @@ type WorkRGB struct {
 type Cell struct {
 	Top    [3]uint8
 	Bottom [3]uint8
-	Ch     rune // '?' or '?' or ' '
+	Ch     rune
 }
 
 type CellGrid struct {
 	W, H  int
-	Cells []Cell // len = W*H
+	Cells []Cell
 }
 
-// DiffOp represents a single terminal update span.
 type DiffOp struct {
 	X, Y int
 	FG   [3]uint8
