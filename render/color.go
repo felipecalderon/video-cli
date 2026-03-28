@@ -43,12 +43,15 @@ func quantizeChannel(c uint8, levels int) uint8 {
 	return uint8((idx*255 + (levels-1)/2) / (levels - 1))
 }
 
-func ditherChannel(c uint8, threshold uint8, area int) uint8 {
+func ditherChannel(c uint8, threshold uint8, area int, biasRange int) uint8 {
 	if area <= 0 {
 		return c
 	}
 
-	biasRange := 2
+	if biasRange <= 0 {
+		return c
+	}
+
 	bias := int(threshold)*((biasRange*2)+1)/area - biasRange
 	if bias == 0 {
 		return c

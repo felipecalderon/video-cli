@@ -32,6 +32,7 @@ Lograr reproducir un video corto en terminal con:
 - Semana 1: base funcional completa
 - Semana 2: motor perceptual inicial completo
 - Semana 3: diff rendering completo, buffer doble y pacing en progreso
+- Semana 4: dithering dinámico optimizado, scanlines y modo CRT ya integrados
 
 ---
 

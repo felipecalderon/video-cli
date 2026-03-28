@@ -30,9 +30,13 @@
 ## Semana 4 — Magia perceptual
 
 - [x] Persistencia temporal (frame blending)
-- [ ] Ajuste dinámico de dithering
-- [ ] Simulación de scanlines
-- [ ] Modo “CRT”
+- [x] Ajuste dinámico de dithering
+  - [x] Separar el análisis de contraste del buffer de salida
+  - [x] Afinar rangos de bias por preset (`quality` / `crt`)
+  - [x] Agregar pruebas de estabilidad visual y no mutación
+- [x] Simulación de scanlines
+- [x] Modo “CRT”
+  - [x] Ajuste final de intensidades y look perceptual
 
 ---
 

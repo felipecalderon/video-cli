@@ -37,3 +37,18 @@ func TestTemporalBlendAlphaOneUsesPrev(t *testing.T) {
 func workRGB(w, h int, pix []uint8) types.WorkRGB {
 	return types.WorkRGB{W: w, H: h, Stride: w * 3, Pix: pix}
 }
+
+func BenchmarkTemporalBlend(b *testing.B) {
+	bl := &TemporalBlend{}
+	in := workRGB(160, 80, make([]uint8, 160*80*3))
+	for i := range in.Pix {
+		in.Pix[i] = byte(i)
+	}
+
+	b.ResetTimer()
+	for i := 0; i < b.N; i++ {
+		if _, err := bl.Blend(context.Background(), in, 0.3); err != nil {
+			b.Fatal(err)
+		}
+	}
+}
