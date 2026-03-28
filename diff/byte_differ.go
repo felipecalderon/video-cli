@@ -6,21 +6,34 @@ import (
 	"video-terminal/types"
 )
 
-type ByteDiffer struct{}
+type ByteDiffer struct {
+	ops   []types.DiffOp
+	runes []rune
+}
 
-func (ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.CellGrid) ([]types.DiffOp, error) {
+func (d *ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.CellGrid) ([]types.DiffOp, error) {
 	_ = ctx
 
 	if curr.W <= 0 || curr.H <= 0 || len(curr.Cells) != curr.W*curr.H {
 		return nil, fmt.Errorf("invalid current cell grid")
 	}
 
-	ops := make([]types.DiffOp, 0, curr.W*curr.H/4)
+	if d == nil {
+		return nil, fmt.Errorf("nil differ")
+	}
+	estimate := curr.W * curr.H / 4
+	if cap(d.ops) < estimate {
+		d.ops = make([]types.DiffOp, 0, estimate)
+	}
+	ops := d.ops[:0]
+	if cap(d.runes) < curr.W {
+		d.runes = make([]rune, 0, curr.W)
+	}
 
 	for y := 0; y < curr.H; y++ {
 		rowStart := -1
 		var run types.Cell
-		var runText []rune
+		runText := d.runes[:0]
 
 		flush := func(endX int) {
 			if rowStart < 0 || len(runText) == 0 {
@@ -76,5 +89,6 @@ func (ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.Cel
 		flush(curr.W)
 	}
 
+	d.ops = ops
 	return ops, nil
 }

@@ -46,7 +46,7 @@ func TestBayerDitherAppliesSpatialVariation(t *testing.T) {
 		t.Fatalf("Quantize returned error: %v", err)
 	}
 
-	out, err := BayerDither{}.Dither(nil, quantized, types.PresetFast)
+	out, err := (&BayerDither{}).Dither(nil, quantized, types.PresetFast)
 	if err != nil {
 		t.Fatalf("Dither returned error: %v", err)
 	}
@@ -61,7 +61,7 @@ func TestTileContrastFlatIsLow(t *testing.T) {
 	for i := range in.Pix {
 		in.Pix[i] = 80
 	}
-	luma := buildLumaBuffer(in)
+	luma := (&BayerDither{}).buildLumaBuffer(in)
 
 	if got := tileContrast(luma, in.W, in.H, 0, 0, 2); got != 0 {
 		t.Fatalf("expected zero contrast for flat area, got %d", got)
@@ -82,7 +82,7 @@ func TestTileContrastEdgeIsHigh(t *testing.T) {
 			in.Pix[idx+2] = val
 		}
 	}
-	luma := buildLumaBuffer(in)
+	luma := (&BayerDither{}).buildLumaBuffer(in)
 
 	if got := tileContrast(luma, in.W, in.H, 0, 0, 4); got < 40 {
 		t.Fatalf("expected noticeable contrast near edge, got %d", got)
@@ -95,7 +95,7 @@ func BenchmarkBayerDitherQuality(b *testing.B) {
 		in.Pix[i] = byte(i)
 	}
 
-	d := BayerDither{}
+	d := &BayerDither{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := d.Dither(context.Background(), in, types.PresetQuality); err != nil {

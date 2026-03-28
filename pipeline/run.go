@@ -25,6 +25,14 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 	var currIdx int
 	mapperInto, supportsReuse := p.Mapper.(MapperInto)
 	nextTick := time.Now().Add(frameDuration)
+	timer := time.NewTimer(0)
+	if !timer.Stop() {
+		select {
+		case <-timer.C:
+		default:
+		}
+	}
+	defer timer.Stop()
 
 	for {
 		select {
@@ -113,7 +121,13 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		if elapsed < frameDuration {
 			sleep := time.Until(targetTick)
 			if sleep > 0 {
-				timer := time.NewTimer(sleep)
+				if !timer.Stop() {
+					select {
+					case <-timer.C:
+					default:
+					}
+				}
+				timer.Reset(sleep)
 				select {
 				case <-ctx.Done():
 					timer.Stop()
@@ -127,3 +141,4 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		}
 	}
 }
+

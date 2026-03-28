@@ -6,9 +6,14 @@ import (
 	"video-terminal/types"
 )
 
-type BayerDither struct{}
+type BayerDither struct {
+	bias4     [5][64]int
+	bias8     [5][64]int
+	biasReady bool
+	luma      []uint8
+}
 
-func (BayerDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Preset) (types.WorkRGB, error) {
+func (d *BayerDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Preset) (types.WorkRGB, error) {
 	_ = ctx
 
 	if in.W <= 0 || in.H <= 0 || len(in.Pix) < in.Stride*in.H {
@@ -21,6 +26,7 @@ func (BayerDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Pr
 	var minBias int
 	var maxBias int
 	var sourceLuma []uint8
+	var biasTable *[5][64]int
 
 	switch preset {
 	case types.PresetQuality, types.PresetCRT:
@@ -31,6 +37,7 @@ func (BayerDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Pr
 		dynamic = true
 		minBias = 0
 		maxBias = 4
+		biasTable = d.ensureBiasTable(8)
 	default:
 		matrixSize = 4
 		thresholdLookup = func(x, y int) uint8 {
@@ -39,12 +46,11 @@ func (BayerDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Pr
 		dynamic = false
 		minBias = 2
 		maxBias = 2
+		biasTable = d.ensureBiasTable(4)
 	}
 
-	area := matrixSize * matrixSize
-	biasTable := buildBiasTable(area, maxBias)
 	if dynamic {
-		sourceLuma = buildLumaBuffer(in)
+		sourceLuma = d.buildLumaBuffer(in)
 	}
 
 	out := in
@@ -65,7 +71,7 @@ func (BayerDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Pr
 				}
 			}
 
-			bias := biasTable[biasRange][threshold]
+			bias := (*biasTable)[biasRange][threshold]
 			out.Pix[idx+0] = applyBias(out.Pix[idx+0], bias)
 			out.Pix[idx+1] = applyBias(out.Pix[idx+1], bias)
 			out.Pix[idx+2] = applyBias(out.Pix[idx+2], bias)
@@ -75,8 +81,12 @@ func (BayerDither) Dither(ctx context.Context, in types.WorkRGB, preset types.Pr
 	return out, nil
 }
 
-func buildLumaBuffer(in types.WorkRGB) []uint8 {
-	buf := make([]uint8, in.W*in.H)
+func (d *BayerDither) buildLumaBuffer(in types.WorkRGB) []uint8 {
+	need := in.W * in.H
+	if cap(d.luma) < need {
+		d.luma = make([]uint8, need)
+	}
+	buf := d.luma[:need]
 	for y := 0; y < in.H; y++ {
 		row := y * in.Stride
 		for x := 0; x < in.W; x++ {
@@ -85,6 +95,26 @@ func buildLumaBuffer(in types.WorkRGB) []uint8 {
 		}
 	}
 	return buf
+}
+
+func (d *BayerDither) ensureBiasTable(size int) *[5][64]int {
+	if d == nil {
+		if size == 8 {
+			table := buildBiasTable(64, 4)
+			return &table
+		}
+		table := buildBiasTable(16, 4)
+		return &table
+	}
+	if !d.biasReady {
+		d.bias4 = buildBiasTable(16, 4)
+		d.bias8 = buildBiasTable(64, 4)
+		d.biasReady = true
+	}
+	if size == 8 {
+		return &d.bias8
+	}
+	return &d.bias4
 }
 
 func tileContrast(luma []uint8, w, h, tileX, tileY, tileSize int) int {

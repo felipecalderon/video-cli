@@ -18,7 +18,7 @@ func TestByteDifferGroupsContiguousRuns(t *testing.T) {
 		},
 	}
 
-	ops, err := ByteDiffer{}.Diff(context.Background(), grid, nil)
+	ops, err := (&ByteDiffer{}).Diff(context.Background(), grid, nil)
 	if err != nil {
 		t.Fatalf("Diff returned error: %v", err)
 	}
@@ -40,7 +40,7 @@ func BenchmarkByteDiffer(b *testing.B) {
 		grid.Cells[i] = types.Cell{Top: [3]uint8{1, 2, 3}, Bottom: [3]uint8{4, 5, 6}, Ch: '▀'}
 	}
 
-	d := ByteDiffer{}
+	d := &ByteDiffer{}
 	b.ResetTimer()
 	for i := 0; i < b.N; i++ {
 		if _, err := d.Diff(context.Background(), grid, nil); err != nil {

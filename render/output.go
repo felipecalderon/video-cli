@@ -11,20 +11,31 @@ import (
 type ANSIOutput struct {
 	writer    *bufio.Writer
 	colorMode types.ColorMode
+	buf       []byte
+	lastFG    [3]uint8
+	lastBG    [3]uint8
+	hasColor  bool
 }
 
-func NewANSIOutput(w io.Writer, mode types.ColorMode) ANSIOutput {
-	return ANSIOutput{writer: bufio.NewWriterSize(w, 64*1024), colorMode: mode}
+func NewANSIOutput(w io.Writer, mode types.ColorMode) *ANSIOutput {
+	return &ANSIOutput{writer: bufio.NewWriterSize(w, 64*1024), colorMode: mode}
 }
 
-func (o ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
+func (o *ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
 	_ = ctx
 
 	if len(ops) == 0 {
 		return nil
 	}
 
-	buf := make([]byte, 0, len(ops)*48)
+	if o == nil || o.writer == nil {
+		return nil
+	}
+	need := len(ops) * 48
+	if cap(o.buf) < need {
+		o.buf = make([]byte, 0, need)
+	}
+	buf := o.buf[:0]
 	for _, op := range ops {
 		buf = append(buf, '\x1b', '[')
 		buf = strconv.AppendInt(buf, int64(op.Y+1), 10)
@@ -32,30 +43,35 @@ func (o ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
 		buf = strconv.AppendInt(buf, int64(op.X+1), 10)
 		buf = append(buf, 'H')
 
-		if o.colorMode == types.Color256 {
-			fg := rgbToANSI256(op.FG)
-			bg := rgbToANSI256(op.BG)
-			buf = append(buf, '\x1b', '[')
-			buf = append(buf, "38;5;"...)
-			buf = strconv.AppendInt(buf, int64(fg), 10)
-			buf = append(buf, ';', '4', '8', ';', '5', ';')
-			buf = strconv.AppendInt(buf, int64(bg), 10)
-			buf = append(buf, 'm')
-		} else {
-			buf = append(buf, '\x1b', '[')
-			buf = append(buf, "38;2;"...)
-			buf = strconv.AppendInt(buf, int64(op.FG[0]), 10)
-			buf = append(buf, ';')
-			buf = strconv.AppendInt(buf, int64(op.FG[1]), 10)
-			buf = append(buf, ';')
-			buf = strconv.AppendInt(buf, int64(op.FG[2]), 10)
-			buf = append(buf, ';', '4', '8', ';', '2', ';')
-			buf = strconv.AppendInt(buf, int64(op.BG[0]), 10)
-			buf = append(buf, ';')
-			buf = strconv.AppendInt(buf, int64(op.BG[1]), 10)
-			buf = append(buf, ';')
-			buf = strconv.AppendInt(buf, int64(op.BG[2]), 10)
-			buf = append(buf, 'm')
+		if !o.hasColor || o.lastFG != op.FG || o.lastBG != op.BG {
+			if o.colorMode == types.Color256 {
+				fg := rgbToANSI256(op.FG)
+				bg := rgbToANSI256(op.BG)
+				buf = append(buf, '\x1b', '[')
+				buf = append(buf, "38;5;"...)
+				buf = strconv.AppendInt(buf, int64(fg), 10)
+				buf = append(buf, ';', '4', '8', ';', '5', ';')
+				buf = strconv.AppendInt(buf, int64(bg), 10)
+				buf = append(buf, 'm')
+			} else {
+				buf = append(buf, '\x1b', '[')
+				buf = append(buf, "38;2;"...)
+				buf = strconv.AppendInt(buf, int64(op.FG[0]), 10)
+				buf = append(buf, ';')
+				buf = strconv.AppendInt(buf, int64(op.FG[1]), 10)
+				buf = append(buf, ';')
+				buf = strconv.AppendInt(buf, int64(op.FG[2]), 10)
+				buf = append(buf, ';', '4', '8', ';', '2', ';')
+				buf = strconv.AppendInt(buf, int64(op.BG[0]), 10)
+				buf = append(buf, ';')
+				buf = strconv.AppendInt(buf, int64(op.BG[1]), 10)
+				buf = append(buf, ';')
+				buf = strconv.AppendInt(buf, int64(op.BG[2]), 10)
+				buf = append(buf, 'm')
+			}
+			o.lastFG = op.FG
+			o.lastBG = op.BG
+			o.hasColor = true
 		}
 
 		if op.Text != "" {
@@ -68,6 +84,7 @@ func (o ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
 	if _, err := o.writer.Write(buf); err != nil {
 		return err
 	}
+	o.buf = buf
 
 	return o.writer.Flush()
 }

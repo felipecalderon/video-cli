@@ -3,7 +3,6 @@ package render
 import (
 	"context"
 	"fmt"
-	"math"
 	"video-terminal/types"
 )
 
@@ -32,14 +31,26 @@ func (ScanlineEffect) Apply(ctx context.Context, in types.WorkRGB, preset types.
 	}
 
 	out := in
+	const scale = 1024
+	const denom = scale * scale
+	minRow := (28*scale + 50) / 100
+	baseRow := scale
+	oddRow := int((1.0-strength)*scale + 0.5)
+	if oddRow < minRow {
+		oddRow = minRow
+	}
+	liftAdd := int(phosphorLift*255 + 0.5)
+	maskUp := scale
+	maskDown := scale
+	if maskStrength > 0 {
+		maskUp = int((1.0+maskStrength)*scale + 0.5)
+		maskDown = int((1.0-maskStrength/2.0)*scale + 0.5)
+	}
 
 	for y := 0; y < in.H; y++ {
-		rowFactor := 1.0
+		rowFactor := baseRow
 		if y%2 == 1 {
-			rowFactor -= strength
-		}
-		if rowFactor < 0.28 {
-			rowFactor = 0.28
+			rowFactor = oddRow
 		}
 
 		row := y * in.Stride
@@ -47,34 +58,39 @@ func (ScanlineEffect) Apply(ctx context.Context, in types.WorkRGB, preset types.
 			idx := row + x*3
 			maskPhase := (x + y) % 3
 			for c := 0; c < 3; c++ {
-				channelFactor := 1.0
+				channelFactor := scale
 				if maskStrength > 0 {
 					switch maskPhase {
 					case 0:
 						if c == 0 {
-							channelFactor += maskStrength
+							channelFactor = maskUp
 						} else {
-							channelFactor -= maskStrength / 2
+							channelFactor = maskDown
 						}
 					case 1:
 						if c == 1 {
-							channelFactor += maskStrength
+							channelFactor = maskUp
 						} else {
-							channelFactor -= maskStrength / 2
+							channelFactor = maskDown
 						}
 					case 2:
 						if c == 2 {
-							channelFactor += maskStrength
+							channelFactor = maskUp
 						} else {
-							channelFactor -= maskStrength / 2
+							channelFactor = maskDown
 						}
 					}
 				}
-				v := float64(out.Pix[idx+c])*rowFactor*channelFactor + phosphorLift*255
-				if v > 255 {
-					v = 255
+				v := int(out.Pix[idx+c])
+				mix := v * rowFactor * channelFactor
+				mix = (mix + denom/2) / denom
+				mix += liftAdd
+				if mix > 255 {
+					mix = 255
+				} else if mix < 0 {
+					mix = 0
 				}
-				out.Pix[idx+c] = uint8(math.Round(v))
+				out.Pix[idx+c] = uint8(mix)
 			}
 		}
 	}

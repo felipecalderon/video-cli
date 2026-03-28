@@ -16,6 +16,7 @@ type FFmpegDecoder struct {
 	frameSize int
 	width     int
 	height    int
+	buf       []byte
 }
 
 type ffprobeResponse struct {
@@ -81,24 +82,27 @@ func (d *FFmpegDecoder) Next(ctx context.Context) (types.FrameRGB, error) {
 		return types.FrameRGB{}, io.EOF
 	}
 
-	buf := make([]byte, d.frameSize)
-
-	errCh := make(chan error, 1)
-	go func() {
-		_, err := io.ReadFull(d.stdout, buf)
-		errCh <- err
-	}()
-
-	select {
-	case <-ctx.Done():
-		return types.FrameRGB{}, ctx.Err()
-	case err := <-errCh:
-		if err != nil {
-			if err == io.EOF || err == io.ErrUnexpectedEOF {
-				return types.FrameRGB{}, io.EOF
-			}
-			return types.FrameRGB{}, fmt.Errorf("read ffmpeg frame: %w", err)
+	if ctx != nil {
+		select {
+		case <-ctx.Done():
+			return types.FrameRGB{}, ctx.Err()
+		default:
 		}
+	}
+
+	if cap(d.buf) < d.frameSize {
+		d.buf = make([]byte, d.frameSize)
+	}
+	buf := d.buf[:d.frameSize]
+
+	if _, err := io.ReadFull(d.stdout, buf); err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return types.FrameRGB{}, io.EOF
+		}
+		if ctx != nil && ctx.Err() != nil {
+			return types.FrameRGB{}, ctx.Err()
+		}
+		return types.FrameRGB{}, fmt.Errorf("read ffmpeg frame: %w", err)
 	}
 
 	return types.FrameRGB{

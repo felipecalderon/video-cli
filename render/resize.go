@@ -6,9 +6,14 @@ import (
 	"video-terminal/types"
 )
 
-type NearestResizer struct{}
+type NearestResizer struct {
+	buf    []byte
+	width  int
+	height int
+	stride int
+}
 
-func (NearestResizer) Resize(ctx context.Context, src types.FrameRGB, termW, termH int) (types.WorkRGB, error) {
+func (r *NearestResizer) Resize(ctx context.Context, src types.FrameRGB, termW, termH int) (types.WorkRGB, error) {
 	_ = ctx
 
 	if src.W <= 0 || src.H <= 0 || len(src.Pix) < src.Stride*src.H {
@@ -20,7 +25,17 @@ func (NearestResizer) Resize(ctx context.Context, src types.FrameRGB, termW, ter
 
 	workH := termH * 2
 	stride := termW * 3
-	pix := make([]byte, stride*workH)
+	need := stride * workH
+	if r == nil {
+		return types.WorkRGB{}, fmt.Errorf("nil resizer")
+	}
+	if r.width != termW || r.height != workH || r.stride != stride || cap(r.buf) < need {
+		r.buf = make([]byte, need)
+		r.width = termW
+		r.height = workH
+		r.stride = stride
+	}
+	pix := r.buf[:need]
 
 	for y := 0; y < workH; y++ {
 		srcY := y * src.H / workH
