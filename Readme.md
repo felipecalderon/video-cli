@@ -29,10 +29,8 @@ Lograr reproducir un video corto en terminal con:
 
 ## Estado actual
 
-- Semana 1: base funcional completa
-- Semana 2: motor perceptual inicial completo
-- Semana 3: diff rendering completo, buffer doble y pacing en progreso
-- Semana 4: dithering dinámico optimizado, scanlines y modo CRT ya integrados
+- MVP funcional y optimizado (render fluido, sin lag perceptible)
+- Pendiente: empaquetado con binarios y CLI global `vterminal`
 
 ---
 
@@ -81,19 +79,56 @@ Terminal output
 
 ---
 
-## Ejemplo de uso (conceptual)
+## Ejemplo de uso (actual)
 
 ```bash
-go run ./cmd/player --input .\test.mp4 --fps 15 --color auto --preset fast
+go run ./cmd/vterminal --input .\test.mp4 --fps 15 --color auto --preset fast
 ```
 
 Si tu FFmpeg no está en el PATH:
 
 ```bash
-go run ./cmd/player --input .\test.mp4 --fps 15 --color auto --preset fast --ffmpeg C:\ffmpeg\bin\ffmpeg.exe --ffprobe C:\ffmpeg\bin\ffprobe.exe
+go run ./cmd/vterminal --input .\test.mp4 --fps 15 --color auto --preset fast --ffmpeg C:\ffmpeg\bin\ffmpeg.exe --ffprobe C:\ffmpeg\bin\ffprobe.exe
 ```
 
 ---
+
+## Build cross-platform
+
+### Windows (PowerShell)
+```powershell
+.\scripts\build.ps1
+```
+
+### macOS / Linux (bash)
+```bash
+./scripts/build.sh
+```
+
+Los binarios quedan en `dist/` con nombres como `vterminal_windows_amd64.exe`.
+
+---
+
+## Instalación sin Go
+
+Ver guía: `readme/Install.md`.
+
+## Instalación (futuro, sin Go)
+
+Objetivo: que el usuario ejecute solo:
+
+```bash
+vterminal --input .\test.mp4
+```
+
+### Plan de empaquetado (binarios precompilados)
+1. Definir comando global: `vterminal`
+2. Crear entrypoint `cmd/vterminal` (o renombrar `cmd/player`)
+3. Generar binarios para Windows/macOS/Linux con `go build`
+4. Publicar releases con los binarios
+5. Documentar instalación: descarga binario, agregar al `PATH` y requerir FFmpeg externo
+
+Nota: FFmpeg seguirá siendo requisito externo.
 
 
 ## Configuración (JSON)
@@ -116,7 +151,7 @@ Ejemplo (`config.json`):
 Uso:
 
 ```bash
-go run ./cmd/player --input .\test.mp4 --config .\config.example.json
+go run ./cmd/vterminal --input .\test.mp4 --config .\config.example.json
 ```
 
 Campos soportados:

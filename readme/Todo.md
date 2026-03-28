@@ -1,49 +1,36 @@
-# ✅ TODO LIST — MVP (1 mes)
+# ✅ TODO LIST — MVP
 
-## Semana 1 — Base funcional
-
+## Features (Done)
 - [x] Integración con FFmpeg (extraer frames)
 - [x] Render básico en terminal (color ANSI)
 - [x] Resize de frames a tamaño de terminal
 - [x] Loop de reproducción simple
-
----
-
-## Semana 2 — Motor perceptual inicial
-
 - [x] Separación de canales RGB
 - [x] Cuantización básica por canal
 - [x] Implementación de dithering simple (Bayer)
 - [x] Soporte para caracteres Unicode (`▀`, `▄`)
+- [x] Persistencia temporal (frame blending)
+- [x] Simulación de scanlines
+- [x] Modo “CRT” (intensidades y look perceptual)
 
----
-
-## Semana 3 — Optimización
-
+## Optimización (Done)
 - [x] Diff rendering (solo cambios)
 - [x] Buffer doble (double buffering)
 - [x] Ajuste de FPS estable
 - [x] Optimización de escritura a stdout
+- [x] Reuso de buffers por frame (evita GC)
+- [x] Eliminar goroutine por frame en decoder
+- [x] Reuso de timer en pacing de FPS
+- [x] Evitar SGR redundante en salida ANSI
+- [x] Scanlines sin float por píxel (fixed-point)
 
----
-
-## Semana 4 — Magia perceptual
-
-- [x] Persistencia temporal (frame blending)
-- [x] Ajuste dinámico de dithering
-  - [x] Separar el análisis de contraste del buffer de salida
-  - [x] Afinar rangos de bias por preset (`quality` / `crt`)
-  - [x] Agregar pruebas de estabilidad visual y no mutación
-- [x] Simulación de scanlines
-- [x] Modo “CRT”
-  - [x] Ajuste final de intensidades y look perceptual
-
----
-
-## Stretch goals (si sobra tiempo)
-
-- [ ] Interlaced rendering
-- [ ] Configuración dinámica según terminal
-- [ ] Perfiles visuales (retro, limpio, glitch)
-
----
+## Pendientes (Opcional)
+- [x] Comando global `vterminal` (entrypoint `cmd/vterminal`)
+- [x] Scripts de build cross-platform (Windows/macOS/Linux)
+- [ ] Empaquetado con binarios precompilados
+- [ ] Publicar releases con binarios
+- [ ] Guía de instalación sin Go (FFmpeg externo)
+- [ ] Cachear contraste por tile en dithering dinámico
+- [ ] Agrupar ops contiguos por fila para menos movimientos de cursor
+- [ ] Resize optimizado (SIMD / Go assembly si se necesita)
+- [ ] Resize dinámico al cambiar tamaño de terminal
