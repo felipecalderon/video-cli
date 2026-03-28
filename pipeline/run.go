@@ -56,6 +56,14 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			work = blended
 		}
 
+		if p.Scanliner != nil {
+			scanned, err := p.Scanliner.Apply(ctx, work, params.Preset)
+			if err != nil {
+				return err
+			}
+			work = scanned
+		}
+
 		dithered, err := p.Dither.Dither(ctx, work, params.Preset)
 		if err != nil {
 			return err

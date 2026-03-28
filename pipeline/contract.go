@@ -25,6 +25,10 @@ type Temporal interface {
 	Blend(ctx context.Context, in types.WorkRGB, alpha float64) (types.WorkRGB, error)
 }
 
+type Scanliner interface {
+	Apply(ctx context.Context, in types.WorkRGB, preset types.Preset) (types.WorkRGB, error)
+}
+
 type Mapper interface {
 	Map(ctx context.Context, in types.WorkRGB) (types.CellGrid, error)
 }
@@ -47,6 +51,7 @@ type Pipeline struct {
 	Quantizer Quantizer
 	Dither    Dither
 	Temporal  Temporal
+	Scanliner Scanliner
 	Mapper    Mapper
 	Differ    Differ
 	Output    Output

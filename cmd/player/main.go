@@ -361,6 +361,7 @@ func main() {
 		Quantizer: render.ChannelQuantizer{},
 		Dither:    render.BayerDither{},
 		Temporal:  &render.TemporalBlend{},
+		Scanliner: render.ScanlineEffect{},
 		Mapper:    render.BlockMapper{},
 		Differ:    diff.ByteDiffer{},
 		Output:    render.NewANSIOutput(os.Stdout, mode),
@@ -419,7 +420,7 @@ func defaultBlendForPreset(v string) float64 {
 	case "quality":
 		return 0.18
 	case "crt":
-		return 0.30
+		return 0.38
 	default:
 		return 0
 	}
