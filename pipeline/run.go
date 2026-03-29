@@ -24,15 +24,15 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 	var buffers [2]types.CellGrid
 	var currIdx int
 	mapperInto, supportsReuse := p.Mapper.(MapperInto)
-	nextTick := time.Now().Add(frameDuration)
-	timer := time.NewTimer(0)
-	if !timer.Stop() {
-		select {
-		case <-timer.C:
-		default:
+
+	// Iniciar contadores para sincronía
+	framesParsed := 0
+	var syncTimer *time.Timer
+	defer func() {
+		if syncTimer != nil {
+			syncTimer.Stop()
 		}
-	}
-	defer timer.Stop()
+	}()
 
 	for {
 		select {
@@ -50,7 +50,61 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		default:
 		}
 
-		start := time.Now()
+		// --- DECISION DE SINCRONIA ---
+		// El "Presentation Timestamp" (PTS) calculado según el número del frame.
+		pts := time.Duration(framesParsed) * frameDuration
+		
+		// Si tenemos un reloj externo (Audio), sincronizamos.
+		if params.Clock != nil {
+			at := params.Clock.CurrentTime()
+			diff := pts - at
+			
+			// Caso 1: Vamos muy rápido (el video está adelantado > 10ms)
+			if diff > 10*time.Millisecond {
+				if syncTimer == nil {
+					syncTimer = time.NewTimer(diff)
+				} else {
+					if !syncTimer.Stop() {
+						select {
+						case <-syncTimer.C:
+						default:
+						}
+					}
+					syncTimer.Reset(diff)
+				}
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-syncTimer.C:
+					// Alcanzamos el punto de renderizado
+				}
+			}
+			
+			// Caso 2: Vamos muy lento (el video está atrasado > 25ms)
+			// Saltamos frames de forma agresiva hasta alcanzar al audio.
+			if diff < -25*time.Millisecond {
+				skipCount := 0
+				// Consumir frames hasta sincronizar o hasta un máximo de 1 segundo de "skip" por ciclo.
+				for diff < -25*time.Millisecond && skipCount < params.FpsTarget {
+					if _, err := p.Decoder.Next(ctx); err != nil {
+						break 
+					}
+					framesParsed++
+					skipCount++
+					
+					at = params.Clock.CurrentTime()
+					pts = time.Duration(framesParsed) * frameDuration
+					diff = pts - at
+				}
+				// Si aún después del skip sigue atrasado, continuamos el bucle principal inmediatamente.
+				if diff < -25*time.Millisecond {
+					continue
+				}
+			}
+		} else {
+			// Fallback: Si no hay audio, usamos un sleep controlado.
+			time.Sleep(frameDuration)
+		}
 
 		frame, err := p.Decoder.Next(ctx)
 		if err != nil {
@@ -59,12 +113,12 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			}
 			return err
 		}
+		framesParsed++
 
 		work, err := p.Resizer.Resize(ctx, frame, params.TermW, params.TermH)
 		if err != nil {
 			return err
 		}
-
 		if p.Temporal != nil && params.BlendAlpha > 0 {
 			blended, err := p.Temporal.Blend(ctx, work, params.BlendAlpha)
 			if err != nil {
@@ -121,32 +175,6 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		} else {
 			prevFrame := grid
 			prev = &prevFrame
-		}
-
-		elapsed := time.Since(start)
-		targetTick := nextTick
-		nextTick = nextTick.Add(frameDuration)
-
-		if elapsed < frameDuration {
-			sleep := time.Until(targetTick)
-			if sleep > 0 {
-				if !timer.Stop() {
-					select {
-					case <-timer.C:
-					default:
-					}
-				}
-				timer.Reset(sleep)
-				select {
-				case <-ctx.Done():
-					timer.Stop()
-					return ctx.Err()
-				case <-timer.C:
-				}
-			}
-		} else if time.Since(targetTick) > frameDuration {
-
-			nextTick = time.Now().Add(frameDuration)
 		}
 	}
 }

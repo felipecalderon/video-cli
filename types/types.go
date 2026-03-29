@@ -1,5 +1,7 @@
 package types
 
+import "time"
+
 type FrameRGB struct {
 	W, H   int
 	Stride int
@@ -47,6 +49,10 @@ const (
 	PresetCRT
 )
 
+type Clock interface {
+	CurrentTime() time.Duration
+}
+
 type PipelineParams struct {
 	TermW, TermH int
 	FpsTarget    int
@@ -54,4 +60,5 @@ type PipelineParams struct {
 	Preset       Preset
 	BlendAlpha   float64
 	ResizeChan   <-chan [2]int
+	Clock        Clock // Master clock for A/V sync (Opcional)
 }

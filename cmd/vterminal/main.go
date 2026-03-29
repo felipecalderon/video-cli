@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"video-terminal/audio"
 	"video-terminal/diff"
 	"video-terminal/ingest"
 	"video-terminal/pipeline"
@@ -336,6 +337,20 @@ func main() {
 		}
 	}()
 
+	// --- Inicialización de Audio ---
+	var audioClock types.Clock
+	audioPlayer, err := audio.NewPlayer()
+	if err != nil {
+		slog.Warn("audio player initialization failed, continuing without sound", "err", err)
+	} else {
+		defer audioPlayer.Close()
+		if err := audioPlayer.Play(decoder.AudioReader()); err != nil {
+			slog.Warn("audio playback start failed", "err", err)
+		} else {
+			audioClock = audioPlayer
+		}
+	}
+
 	termW, termH := computeTermSize(termWOverride, termHOverride, scale)
 
 	resizeEvents := make(chan [2]int, 1)
@@ -381,6 +396,7 @@ func main() {
 		Preset:     parsePreset(preset),
 		BlendAlpha: blendAlpha,
 		ResizeChan: resizeEvents,
+		Clock:      audioClock,
 	}
 
 	if err := p.Run(ctx, params); err != nil && !errors.Is(err, context.Canceled) {
