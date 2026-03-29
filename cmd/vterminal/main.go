@@ -310,7 +310,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	decoder, err := ingest.NewFFmpegDecoder(ctx, *input, fps, resolvedFFmpeg, resolvedFFprobe)
+	// --- Resolución automática de URLs remotas ---
+	isStream := ingest.IsURL(*input)
+	if isStream {
+		resolver := &ingest.YtdlpResolver{} // busca yt-dlp en PATH
+		result, err := resolver.Resolve(ctx, *input, 480)
+		if err != nil {
+			slog.Error("failed to resolve stream URL", "resolver", resolver.Name(), "err", err)
+			os.Exit(1)
+		}
+		if result.Title != "" {
+			slog.Info("stream resolved", "title", result.Title)
+		}
+		*input = result.URL
+	}
+
+	decoder, err := ingest.NewFFmpegDecoder(ctx, *input, fps, resolvedFFmpeg, resolvedFFprobe, isStream)
 	if err != nil {
 		slog.Error("failed to initialize decoder", "err", err)
 		os.Exit(1)
@@ -321,34 +336,25 @@ func main() {
 		}
 	}()
 
-	actualW, actualH := term.GetSize()
-	termW := actualW
-	termH := actualH
+	termW, termH := computeTermSize(termWOverride, termHOverride, scale)
 
-	if termWOverride > 0 {
-		termW = minInt(termWOverride, actualW)
-	}
-	if termHOverride > 0 {
-		termH = minInt(termHOverride, actualH)
-	}
-
-	if scale != 1 {
-		termW = int(math.Round(float64(termW) * scale))
-		termH = int(math.Round(float64(termH) * scale))
-	}
-
-	if termW < 1 {
-		termW = 1
-	}
-	if termH < 1 {
-		termH = 1
-	}
-	if termW > actualW {
-		termW = actualW
-	}
-	if termH > actualH {
-		termH = actualH
-	}
+	resizeEvents := make(chan [2]int, 1)
+	resizeSig := term.WatchSize(ctx)
+	go func() {
+		for {
+			select {
+			case <-ctx.Done():
+				return
+			case <-resizeSig:
+				newW, newH := computeTermSize(termWOverride, termHOverride, scale)
+				select {
+				case <-resizeEvents:
+				default:
+				}
+				resizeEvents <- [2]int{newW, newH}
+			}
+		}
+	}()
 
 	mode := term.ResolveColorMode(color)
 
@@ -374,6 +380,7 @@ func main() {
 		ColorMode:  mode,
 		Preset:     parsePreset(preset),
 		BlendAlpha: blendAlpha,
+		ResizeChan: resizeEvents,
 	}
 
 	if err := p.Run(ctx, params); err != nil && !errors.Is(err, context.Canceled) {
@@ -460,4 +467,36 @@ func minInt(a, b int) int {
 		return a
 	}
 	return b
+}
+
+func computeTermSize(termWOverride, termHOverride int, scale float64) (int, int) {
+	actualW, actualH := term.GetSize()
+	termW := actualW
+	termH := actualH
+
+	if termWOverride > 0 {
+		termW = minInt(termWOverride, actualW)
+	}
+	if termHOverride > 0 {
+		termH = minInt(termHOverride, actualH)
+	}
+
+	if scale != 1 {
+		termW = int(math.Round(float64(termW) * scale))
+		termH = int(math.Round(float64(termH) * scale))
+	}
+
+	if termW < 1 {
+		termW = 1
+	}
+	if termH < 1 {
+		termH = 1
+	}
+	if termW > actualW {
+		termW = actualW
+	}
+	if termH > actualH {
+		termH = actualH
+	}
+	return termW, termH
 }

@@ -310,7 +310,22 @@ func main() {
 		os.Exit(1)
 	}
 
-	decoder, err := ingest.NewFFmpegDecoder(ctx, *input, fps, resolvedFFmpeg, resolvedFFprobe)
+	// --- Resolución automática de URLs remotas ---
+	isStream := ingest.IsURL(*input)
+	if isStream {
+		resolver := &ingest.YtdlpResolver{} // busca yt-dlp en PATH
+		result, err := resolver.Resolve(ctx, *input, 480)
+		if err != nil {
+			slog.Error("failed to resolve stream URL", "resolver", resolver.Name(), "err", err)
+			os.Exit(1)
+		}
+		if result.Title != "" {
+			slog.Info("stream resolved", "title", result.Title)
+		}
+		*input = result.URL
+	}
+
+	decoder, err := ingest.NewFFmpegDecoder(ctx, *input, fps, resolvedFFmpeg, resolvedFFprobe, isStream)
 	if err != nil {
 		slog.Error("failed to initialize decoder", "err", err)
 		os.Exit(1)
