@@ -26,7 +26,7 @@ type ffprobeResponse struct {
 	} `json:"streams"`
 }
 
-func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath, ffprobePath string) (*FFmpegDecoder, error) {
+func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath, ffprobePath string, isStream bool) (*FFmpegDecoder, error) {
 	if fps <= 0 {
 		fps = 15
 	}
@@ -42,22 +42,31 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath
 		return nil, err
 	}
 
-	cmd := exec.CommandContext(
-		ctx,
-		ffmpegPath,
+	args := []string{
 		"-hide_banner",
-		"-loglevel",
-		"error",
-		"-i",
-		inputPath,
-		"-vf",
-		fmt.Sprintf("fps=%d", fps),
-		"-f",
-		"rawvideo",
-		"-pix_fmt",
-		"rgb24",
+		"-loglevel", "error",
+	}
+
+	// Flags de reconexión para streams remotos.
+	// Permiten que FFmpeg sobreviva micro-cortes de red
+	// sin abortar la reproducción.
+	if isStream {
+		args = append(args,
+			"-reconnect", "1",
+			"-reconnect_streamed", "1",
+			"-reconnect_delay_max", "2",
+		)
+	}
+
+	args = append(args,
+		"-i", inputPath,
+		"-vf", fmt.Sprintf("fps=%d", fps),
+		"-f", "rawvideo",
+		"-pix_fmt", "rgb24",
 		"pipe:1",
 	)
+
+	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
