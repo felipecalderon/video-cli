@@ -41,6 +41,15 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		default:
 		}
 
+		select {
+		case newSize := <-params.ResizeChan:
+			params.TermW = newSize[0]
+			params.TermH = newSize[1]
+			_ = p.Output.Clear(ctx)
+			prev = nil
+		default:
+		}
+
 		start := time.Now()
 
 		frame, err := p.Decoder.Next(ctx)

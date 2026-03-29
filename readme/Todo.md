@@ -1,6 +1,7 @@
 # ✅ TODO LIST — MVP
 
 ## Features (Done)
+
 - [x] Integración con FFmpeg (extraer frames)
 - [x] Render básico en terminal (color ANSI)
 - [x] Resize de frames a tamaño de terminal
@@ -14,6 +15,7 @@
 - [x] Modo “CRT” (intensidades y look perceptual)
 
 ## Optimización (Done)
+
 - [x] Diff rendering (solo cambios)
 - [x] Buffer doble (double buffering)
 - [x] Ajuste de FPS estable
@@ -24,13 +26,11 @@
 - [x] Evitar SGR redundante en salida ANSI
 - [x] Scanlines sin float por píxel (fixed-point)
 
-## Pendientes (Opcional)
+## Pendientes
+
 - [x] Comando global `vterminal` (entrypoint `cmd/vterminal`)
 - [x] Scripts de build cross-platform (Windows/macOS/Linux)
-- [ ] Empaquetado con binarios precompilados
-- [ ] Publicar releases con binarios
-- [ ] Guía de instalación sin Go (FFmpeg externo)
-- [ ] Cachear contraste por tile en dithering dinámico
-- [ ] Agrupar ops contiguos por fila para menos movimientos de cursor
-- [ ] Resize optimizado (SIMD / Go assembly si se necesita)
-- [ ] Resize dinámico al cambiar tamaño de terminal
+- [x] Arreglar fuga de memoria de rune a string en Differ
+- [ ] Escuchar SIGWINCH para redimensionamiento de terminal en caliente
+- [ ] Módulo de frame pacing suave (recuperación o skip de frames atrasados)
+- [ ] Corregir el redimensionamiento de terminal que rompe el video, más pequeño se rompe, al agrandar se queda del mismo tamaño original.

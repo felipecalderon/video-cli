@@ -28,7 +28,7 @@ type DiffOp struct {
 	FG   [3]uint8
 	BG   [3]uint8
 	Ch   rune
-	Text string
+	Text []rune
 }
 
 type ColorMode uint8
@@ -53,4 +53,5 @@ type PipelineParams struct {
 	ColorMode    ColorMode
 	Preset       Preset
 	BlendAlpha   float64
+	ResizeChan   <-chan [2]int
 }

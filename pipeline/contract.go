@@ -43,6 +43,7 @@ type Differ interface {
 
 type Output interface {
 	Write(ctx context.Context, ops []types.DiffOp) error
+	Clear(ctx context.Context) error
 }
 
 type Pipeline struct {

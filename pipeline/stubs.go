@@ -73,3 +73,8 @@ func (StdoutOutput) Write(ctx context.Context, ops []types.DiffOp) error {
 	_ = ops
 	return ErrNotImplemented
 }
+
+func (StdoutOutput) Clear(ctx context.Context) error {
+	_ = ctx
+	return ErrNotImplemented
+}

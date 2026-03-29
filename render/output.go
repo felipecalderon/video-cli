@@ -74,8 +74,10 @@ func (o *ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
 			o.hasColor = true
 		}
 
-		if op.Text != "" {
-			buf = append(buf, op.Text...)
+		if len(op.Text) > 0 {
+			for _, r := range op.Text {
+				buf = appendRuneUTF8(buf, r)
+			}
 		} else {
 			buf = appendRuneUTF8(buf, op.Ch)
 		}
@@ -101,4 +103,18 @@ func appendRuneUTF8(dst []byte, r rune) []byte {
 		return append(dst, byte(r))
 	}
 	return append(dst, string(r)...)
+}
+
+func (o *ANSIOutput) Clear(ctx context.Context) error {
+	_ = ctx
+	if o == nil || o.writer == nil {
+		return nil
+	}
+	o.hasColor = false
+	o.lastFG = [3]uint8{}
+	o.lastBG = [3]uint8{}
+	if _, err := o.writer.WriteString("\x1b[0m\x1b[2J\x1b[H"); err != nil {
+		return err
+	}
+	return o.writer.Flush()
 }

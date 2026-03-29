@@ -26,17 +26,19 @@ func (d *ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.
 		d.ops = make([]types.DiffOp, 0, estimate)
 	}
 	ops := d.ops[:0]
-	if cap(d.runes) < curr.W {
-		d.runes = make([]rune, 0, curr.W)
+	estimateRunes := curr.W * curr.H
+	if cap(d.runes) < estimateRunes {
+		d.runes = make([]rune, 0, estimateRunes)
 	}
+	d.runes = d.runes[:0]
 
 	for y := 0; y < curr.H; y++ {
 		rowStart := -1
 		var run types.Cell
-		runText := d.runes[:0]
+		runStartIdx := len(d.runes)
 
 		flush := func(endX int) {
-			if rowStart < 0 || len(runText) == 0 {
+			if rowStart < 0 || len(d.runes)-runStartIdx <= 0 {
 				return
 			}
 
@@ -46,10 +48,10 @@ func (d *ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.
 				FG:   run.Top,
 				BG:   run.Bottom,
 				Ch:   run.Ch,
-				Text: string(runText),
+				Text: d.runes[runStartIdx:],
 			})
 			rowStart = -1
-			runText = runText[:0]
+			runStartIdx = len(d.runes)
 			_ = endX
 		}
 
@@ -71,19 +73,19 @@ func (d *ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.
 			if rowStart == -1 {
 				rowStart = x
 				run = cc
-				runText = append(runText[:0], cc.Ch)
+				d.runes = append(d.runes, cc.Ch)
 				continue
 			}
 
-			if cc.Top == run.Top && cc.Bottom == run.Bottom && cc.Ch == run.Ch && x == rowStart+len(runText) {
-				runText = append(runText, cc.Ch)
+			if cc.Top == run.Top && cc.Bottom == run.Bottom && x == rowStart+(len(d.runes)-runStartIdx) {
+				d.runes = append(d.runes, cc.Ch)
 				continue
 			}
 
 			flush(x)
 			rowStart = x
 			run = cc
-			runText = append(runText[:0], cc.Ch)
+			d.runes = append(d.runes, cc.Ch)
 		}
 
 		flush(curr.W)
