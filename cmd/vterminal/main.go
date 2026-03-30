@@ -16,6 +16,7 @@ import (
 	"path/filepath"
 	"strconv"
 	"strings"
+	"time"
 	"video-terminal/audio"
 	"video-terminal/diff"
 	"video-terminal/ingest"
@@ -96,6 +97,34 @@ func (f *floatFlag) Set(s string) error {
 	return nil
 }
 
+type durationFlag struct {
+	set bool
+	v   *time.Duration
+}
+
+func (f *durationFlag) String() string {
+	if f == nil || f.v == nil {
+		return ""
+	}
+	return f.v.String()
+}
+
+func (f *durationFlag) Set(s string) error {
+	if f == nil || f.v == nil {
+		return fmt.Errorf("duration flag not initialized")
+	}
+	d, err := time.ParseDuration(s)
+	if err != nil {
+		return fmt.Errorf("invalid duration value %q", s)
+	}
+	if d <= 0 {
+		return fmt.Errorf("duration must be > 0")
+	}
+	f.set = true
+	*f.v = d
+	return nil
+}
+
 type playerConfig struct {
 	Fps        *int     `json:"fps"`
 	Preset     *string  `json:"preset"`
@@ -104,6 +133,7 @@ type playerConfig struct {
 	TermWidth  *int     `json:"term_width"`
 	TermHeight *int     `json:"term_height"`
 	BlendAlpha *float64 `json:"blend_alpha"`
+	SeekStep   *string  `json:"seek_step"`
 }
 
 func loadConfig(path string) (playerConfig, error) {
@@ -157,6 +187,16 @@ func validateConfig(cfg *playerConfig) error {
 			return fmt.Errorf("config blend_alpha must be between 0 and 1")
 		}
 	}
+	if cfg.SeekStep != nil {
+		d, err := time.ParseDuration(strings.TrimSpace(*cfg.SeekStep))
+		if err != nil {
+			return fmt.Errorf("config seek_step must be a valid duration")
+		}
+		if d <= 0 {
+			return fmt.Errorf("config seek_step must be > 0")
+		}
+		*cfg.SeekStep = d.String()
+	}
 	if cfg.Preset != nil {
 		v := strings.ToLower(strings.TrimSpace(*cfg.Preset))
 		if !isValidPreset(v) {
@@ -187,6 +227,7 @@ func main() {
 	termHOverride := 0
 	blendAlpha := 0.0
 	blendAlphaSet := false
+	seekStep := 5 * time.Second
 
 	fpsFlag := intFlag{v: &fps}
 	colorFlag := stringFlag{v: &color}
@@ -195,6 +236,7 @@ func main() {
 	termWFlag := intFlag{v: &termWOverride}
 	termHFlag := intFlag{v: &termHOverride}
 	blendAlphaFlag := floatFlag{v: &blendAlpha}
+	seekStepFlag := durationFlag{v: &seekStep}
 
 	flag.Var(&fpsFlag, "fps", "Target FPS")
 	flag.Var(&colorFlag, "color", "Color mode: auto|truecolor|256")
@@ -203,6 +245,7 @@ func main() {
 	flag.Var(&termWFlag, "term-width", "Override terminal width (columns)")
 	flag.Var(&termHFlag, "term-height", "Override terminal height (rows)")
 	flag.Var(&blendAlphaFlag, "blend-alpha", "Temporal blend alpha (0..1)")
+	flag.Var(&seekStepFlag, "seek-step", "Seek step for left/right arrows (e.g. 5s)")
 
 	ffmpegPath := flag.String("ffmpeg", "", "Path to ffmpeg binary")
 	ffprobePath := flag.String("ffprobe", "", "Path to ffprobe binary")
@@ -248,6 +291,14 @@ func main() {
 		blendAlpha = *cfg.BlendAlpha
 		blendAlphaSet = true
 	}
+	if cfg.SeekStep != nil {
+		d, err := time.ParseDuration(*cfg.SeekStep)
+		if err != nil {
+			slog.Error("invalid seek_step in config", "err", err)
+			os.Exit(2)
+		}
+		seekStep = d
+	}
 
 	if fpsFlag.set {
 		fps = *fpsFlag.v
@@ -271,6 +322,9 @@ func main() {
 		blendAlpha = *blendAlphaFlag.v
 		blendAlphaSet = true
 	}
+	if seekStepFlag.set {
+		seekStep = *seekStepFlag.v
+	}
 
 	if fps <= 0 {
 		slog.Error("invalid fps (must be > 0)")
@@ -293,6 +347,10 @@ func main() {
 	}
 	if blendAlpha < 0 || blendAlpha > 1 {
 		slog.Error("invalid blend-alpha (must be 0..1)")
+		os.Exit(2)
+	}
+	if seekStep <= 0 {
+		slog.Error("invalid seek-step (must be > 0)")
 		os.Exit(2)
 	}
 
@@ -326,31 +384,6 @@ func main() {
 		*input = result.URL
 	}
 
-	decoder, err := ingest.NewFFmpegDecoder(ctx, *input, fps, resolvedFFmpeg, resolvedFFprobe, isStream)
-	if err != nil {
-		slog.Error("failed to initialize decoder", "err", err)
-		os.Exit(1)
-	}
-	defer func() {
-		if err := decoder.Close(); err != nil && !errors.Is(err, io.EOF) {
-			slog.Warn("decoder close error", "err", err)
-		}
-	}()
-
-	// --- Inicialización de Audio ---
-	var audioClock types.Clock
-	audioPlayer, err := audio.NewPlayer()
-	if err != nil {
-		slog.Warn("audio player initialization failed, continuing without sound", "err", err)
-	} else {
-		defer audioPlayer.Close()
-		if err := audioPlayer.Play(decoder.AudioReader()); err != nil {
-			slog.Warn("audio playback start failed", "err", err)
-		} else {
-			audioClock = audioPlayer
-		}
-	}
-
 	termW, termH := computeTermSize(termWOverride, termHOverride, scale)
 
 	resizeEvents := make(chan [2]int, 1)
@@ -370,11 +403,96 @@ func main() {
 			}
 		}
 	}()
+	seekCh := term.WatchSeek(ctx, seekStep)
 
 	mode := term.ResolveColorMode(color)
+	output := render.NewANSIOutput(os.Stdout, mode)
 
 	fmt.Print("\x1b[2J\x1b[H\x1b[?25l")
 	defer fmt.Print("\x1b[0m\x1b[?25h\n")
+
+	baseOffset := time.Duration(0)
+	for {
+		seekDelta, shouldSeek, err := runPlaybackSession(ctx, playbackSessionParams{
+			Input:       *input,
+			BaseOffset:  baseOffset,
+			FPS:         fps,
+			Mode:        mode,
+			Preset:      parsePreset(preset),
+			BlendAlpha:  blendAlpha,
+			TermW:       termW,
+			TermH:       termH,
+			FFmpegPath:  resolvedFFmpeg,
+			FFprobePath: resolvedFFprobe,
+			IsStream:    isStream,
+			ResizeChan:  resizeEvents,
+			SeekCh:      seekCh,
+			SeekStep:    seekStep,
+			Output:      output,
+		})
+		if err != nil {
+			if errors.Is(err, context.Canceled) {
+				return
+			}
+			slog.Error("playback session failed", "err", err)
+			os.Exit(1)
+		}
+		if shouldSeek {
+			baseOffset += seekDelta
+			if baseOffset < 0 {
+				baseOffset = 0
+			}
+			fmt.Print("\x1b[2J\x1b[H")
+			continue
+		}
+		return
+	}
+}
+
+type playbackSessionParams struct {
+	Input       string
+	BaseOffset  time.Duration
+	FPS         int
+	Mode        types.ColorMode
+	Preset      types.Preset
+	BlendAlpha  float64
+	TermW       int
+	TermH       int
+	FFmpegPath  string
+	FFprobePath string
+	IsStream    bool
+	ResizeChan  <-chan [2]int
+	SeekCh      <-chan time.Duration
+	SeekStep    time.Duration
+	Output      pipeline.Output
+}
+
+func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time.Duration, bool, error) {
+	sessionCtx, cancel := context.WithCancel(ctx)
+	defer cancel()
+
+	decoder, err := ingest.NewFFmpegDecoder(sessionCtx, params.Input, params.FPS, params.FFmpegPath, params.FFprobePath, params.IsStream, params.BaseOffset)
+	if err != nil {
+		return 0, false, err
+	}
+	defer func() {
+		if err := decoder.Close(); err != nil && !errors.Is(err, io.EOF) {
+			slog.Warn("decoder close error", "err", err)
+		}
+	}()
+
+	var audioClock types.Clock
+	audioPlayer, err := audio.NewPlayer()
+	if err != nil {
+		slog.Warn("audio player initialization failed, continuing without sound", "err", err)
+	} else {
+		defer audioPlayer.Close()
+		if err := audioPlayer.Play(decoder.AudioReader()); err != nil {
+			slog.Warn("audio playback start failed", "err", err)
+		} else {
+			audioClock = audioPlayer
+		}
+	}
 
 	p := pipeline.Pipeline{
 		Decoder:   decoder,
@@ -385,23 +503,47 @@ func main() {
 		Scanliner: render.ScanlineEffect{},
 		Mapper:    render.BlockMapper{},
 		Differ:    &diff.ByteDiffer{},
-		Output:    render.NewANSIOutput(os.Stdout, mode),
+		Output:    params.Output,
 	}
 
-	params := types.PipelineParams{
-		TermW:      termW,
-		TermH:      termH,
-		FpsTarget:  fps,
-		ColorMode:  mode,
-		Preset:     parsePreset(preset),
-		BlendAlpha: blendAlpha,
-		ResizeChan: resizeEvents,
+	runParams := types.PipelineParams{
+		TermW:      params.TermW,
+		TermH:      params.TermH,
+		FpsTarget:  params.FPS,
+		ColorMode:  params.Mode,
+		Preset:     params.Preset,
+		BlendAlpha: params.BlendAlpha,
+		ResizeChan: params.ResizeChan,
 		Clock:      audioClock,
 	}
 
-	if err := p.Run(ctx, params); err != nil && !errors.Is(err, context.Canceled) {
-		slog.Error("pipeline failed", "err", err)
-		os.Exit(1)
+	done := make(chan error, 1)
+	go func() {
+		done <- p.Run(sessionCtx, runParams)
+	}()
+
+	if params.SeekCh == nil {
+		err = <-done
+		return 0, false, err
+	}
+
+	for {
+		select {
+		case <-ctx.Done():
+			cancel()
+			<-done
+			return 0, false, ctx.Err()
+		case delta, ok := <-params.SeekCh:
+			if !ok {
+				params.SeekCh = nil
+				continue
+			}
+			cancel()
+			<-done
+			return delta, true, nil
+		case err = <-done:
+			return 0, false, err
+		}
 	}
 }
 

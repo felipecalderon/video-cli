@@ -29,7 +29,7 @@ type ffprobeResponse struct {
 	} `json:"streams"`
 }
 
-func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath, ffprobePath string, isStream bool) (*FFmpegDecoder, error) {
+func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath, ffprobePath string, isStream bool, startOffset time.Duration) (*FFmpegDecoder, error) {
 	if fps <= 0 {
 		fps = 15
 	}
@@ -60,6 +60,10 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath
 		)
 	}
 
+	if startOffset > 0 {
+		args = append(args, "-ss", fmt.Sprintf("%.3f", startOffset.Seconds()))
+	}
+
 	args = append(args,
 		"-i", inputPath,
 		"-vf", fmt.Sprintf("fps=%d", fps),
@@ -74,7 +78,7 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath
 	)
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
-	
+
 	// Buffer para capturar el error real de FFmpeg si falla al arrancar
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
@@ -122,7 +126,6 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath
 		return nil, fmt.Errorf("ffmpeg hang detected: %s", msg)
 	}
 }
-
 
 func (d *FFmpegDecoder) AudioReader() io.Reader {
 	if d == nil {
