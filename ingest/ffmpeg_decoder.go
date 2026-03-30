@@ -8,18 +8,20 @@ import (
 	"io"
 	"net"
 	"os/exec"
+	"strings"
 	"time"
 	"video-terminal/types"
 )
 
 type FFmpegDecoder struct {
-	cmd       *exec.Cmd
-	stdout    io.ReadCloser
-	audioConn net.Conn
-	frameSize int
-	width     int
-	height    int
-	buf       []byte
+	cmd         *exec.Cmd
+	stdout      io.ReadCloser
+	audioReader *io.PipeReader
+	audioWriter *io.PipeWriter
+	frameSize   int
+	width       int
+	height      int
+	buf         []byte
 }
 
 type ffprobeResponse struct {
@@ -29,14 +31,13 @@ type ffprobeResponse struct {
 	} `json:"streams"`
 }
 
-func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath, ffprobePath string, isStream bool, startOffset time.Duration) (*FFmpegDecoder, error) {
+func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps int, ffmpegPath string, isStream bool, startOffset time.Duration) (*FFmpegDecoder, error) {
 	if fps <= 0 {
 		fps = 15
 	}
 
-	width, height, err := probeVideoSize(ctx, inputPath, ffprobePath)
-	if err != nil {
-		return nil, err
+	if width <= 0 || height <= 0 {
+		return nil, fmt.Errorf("invalid video dimensions")
 	}
 
 	ln, err := net.Listen("tcp", "127.0.0.1:0")
@@ -79,7 +80,7 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath
 
 	cmd := exec.CommandContext(ctx, ffmpegPath, args...)
 
-	// Buffer para capturar el error real de FFmpeg si falla al arrancar
+	// Guardamos stderr para mostrar el motivo real si FFmpeg no conecta.
 	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
@@ -92,7 +93,7 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath
 		return nil, fmt.Errorf("start ffmpeg: %w", err)
 	}
 
-	// Canal para recibir la conexión o el error con timeout
+	// Esperamos la conexión de audio para evitar cerrar el listener demasiado pronto.
 	type acceptRes struct {
 		conn net.Conn
 		err  error
@@ -100,26 +101,41 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, fps int, ffmpegPath
 	resChan := make(chan acceptRes, 1)
 	go func() {
 		conn, err := ln.Accept()
-		resChan <- acceptRes{conn, err}
+		resChan <- acceptRes{conn: conn, err: err}
 	}()
 
 	select {
 	case res := <-resChan:
 		if res.err != nil {
-			cmd.Process.Kill()
+			_ = cmd.Process.Kill()
 			return nil, fmt.Errorf("audio connection failed: %w", res.err)
 		}
+
+		audioReader, audioWriter := io.Pipe()
+		go func() {
+			defer ln.Close()
+			defer res.conn.Close()
+
+			_, copyErr := io.Copy(audioWriter, res.conn)
+			if copyErr != nil {
+				_ = audioWriter.CloseWithError(copyErr)
+				return
+			}
+			_ = audioWriter.Close()
+		}()
+
 		return &FFmpegDecoder{
-			cmd:       cmd,
-			stdout:    stdout,
-			audioConn: res.conn,
-			frameSize: width * height * 3,
-			width:     width,
-			height:    height,
+			cmd:         cmd,
+			stdout:      stdout,
+			audioReader: audioReader,
+			audioWriter: audioWriter,
+			frameSize:   width * height * 3,
+			width:       width,
+			height:      height,
 		}, nil
-	case <-time.After(10 * time.Second): // 10 segundos de margen para conectar
-		cmd.Process.Kill()
-		msg := stderr.String()
+	case <-time.After(10 * time.Second):
+		_ = cmd.Process.Kill()
+		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = "timeout sin logs de error"
 		}
@@ -131,7 +147,7 @@ func (d *FFmpegDecoder) AudioReader() io.Reader {
 	if d == nil {
 		return nil
 	}
-	return d.audioConn
+	return d.audioReader
 }
 
 func (d *FFmpegDecoder) Next(ctx context.Context) (types.FrameRGB, error) {
@@ -179,18 +195,22 @@ func (d *FFmpegDecoder) Close() error {
 		_ = d.stdout.Close()
 	}
 
-	if d.audioConn != nil {
-		_ = d.audioConn.Close()
+	if d.audioWriter != nil {
+		_ = d.audioWriter.Close()
+	}
+
+	if d.audioReader != nil {
+		_ = d.audioReader.Close()
 	}
 
 	if d.cmd != nil {
-		return d.cmd.Wait()
+		_ = d.cmd.Wait()
 	}
 
 	return nil
 }
 
-func probeVideoSize(ctx context.Context, inputPath, ffprobePath string) (int, int, error) {
+func ProbeVideoSize(ctx context.Context, inputPath, ffprobePath string) (int, int, error) {
 	cmd := exec.CommandContext(
 		ctx,
 		ffprobePath,
@@ -205,8 +225,12 @@ func probeVideoSize(ctx context.Context, inputPath, ffprobePath string) (int, in
 		inputPath,
 	)
 
-	out, err := cmd.Output()
+	out, err := cmd.CombinedOutput()
 	if err != nil {
+		msg := strings.TrimSpace(string(out))
+		if msg != "" {
+			return 0, 0, fmt.Errorf("run ffprobe: %w: %s", err, msg)
+		}
 		return 0, 0, fmt.Errorf("run ffprobe: %w", err)
 	}
 

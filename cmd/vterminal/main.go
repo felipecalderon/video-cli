@@ -384,6 +384,12 @@ func main() {
 		*input = result.URL
 	}
 
+	videoW, videoH, err := ingest.ProbeVideoSize(ctx, *input, resolvedFFprobe)
+	if err != nil {
+		slog.Error("failed to probe video size", "err", err)
+		os.Exit(1)
+	}
+
 	termW, termH := computeTermSize(termWOverride, termHOverride, scale)
 
 	resizeEvents := make(chan [2]int, 1)
@@ -414,21 +420,22 @@ func main() {
 	baseOffset := time.Duration(0)
 	for {
 		seekDelta, shouldSeek, err := runPlaybackSession(ctx, playbackSessionParams{
-			Input:       *input,
-			BaseOffset:  baseOffset,
-			FPS:         fps,
-			Mode:        mode,
-			Preset:      parsePreset(preset),
-			BlendAlpha:  blendAlpha,
-			TermW:       termW,
-			TermH:       termH,
-			FFmpegPath:  resolvedFFmpeg,
-			FFprobePath: resolvedFFprobe,
-			IsStream:    isStream,
-			ResizeChan:  resizeEvents,
-			SeekCh:      seekCh,
-			SeekStep:    seekStep,
-			Output:      output,
+			Input:      *input,
+			BaseOffset: baseOffset,
+			FPS:        fps,
+			Mode:       mode,
+			Preset:     parsePreset(preset),
+			BlendAlpha: blendAlpha,
+			TermW:      termW,
+			TermH:      termH,
+			FFmpegPath: resolvedFFmpeg,
+			VideoW:     videoW,
+			VideoH:     videoH,
+			IsStream:   isStream,
+			ResizeChan: resizeEvents,
+			SeekCh:     seekCh,
+			SeekStep:   seekStep,
+			Output:     output,
 		})
 		if err != nil {
 			if errors.Is(err, context.Canceled) {
@@ -450,32 +457,37 @@ func main() {
 }
 
 type playbackSessionParams struct {
-	Input       string
-	BaseOffset  time.Duration
-	FPS         int
-	Mode        types.ColorMode
-	Preset      types.Preset
-	BlendAlpha  float64
-	TermW       int
-	TermH       int
-	FFmpegPath  string
-	FFprobePath string
-	IsStream    bool
-	ResizeChan  <-chan [2]int
-	SeekCh      <-chan time.Duration
-	SeekStep    time.Duration
-	Output      pipeline.Output
+	Input      string
+	BaseOffset time.Duration
+	FPS        int
+	Mode       types.ColorMode
+	Preset     types.Preset
+	BlendAlpha float64
+	TermW      int
+	TermH      int
+	FFmpegPath string
+	VideoW     int
+	VideoH     int
+	IsStream   bool
+	ResizeChan <-chan [2]int
+	SeekCh     <-chan time.Duration
+	SeekStep   time.Duration
+	Output     pipeline.Output
 }
 
 func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time.Duration, bool, error) {
 	sessionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	decoder, err := ingest.NewFFmpegDecoder(sessionCtx, params.Input, params.FPS, params.FFmpegPath, params.FFprobePath, params.IsStream, params.BaseOffset)
+	decoder, err := ingest.NewFFmpegDecoder(sessionCtx, params.Input, params.VideoW, params.VideoH, params.FPS, params.FFmpegPath, params.IsStream, params.BaseOffset)
 	if err != nil {
 		return 0, false, err
 	}
 	defer func() {
+		if sessionCtx.Err() != nil || ctx.Err() != nil {
+			_ = decoder.Close()
+			return
+		}
 		if err := decoder.Close(); err != nil && !errors.Is(err, io.EOF) {
 			slog.Warn("decoder close error", "err", err)
 		}
@@ -531,6 +543,7 @@ func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time
 		select {
 		case <-ctx.Done():
 			cancel()
+			_ = decoder.Close()
 			<-done
 			return 0, false, ctx.Err()
 		case delta, ok := <-params.SeekCh:
@@ -539,7 +552,7 @@ func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time
 				continue
 			}
 			cancel()
-			<-done
+			_ = decoder.Close()
 			return delta, true, nil
 		case err = <-done:
 			return 0, false, err
