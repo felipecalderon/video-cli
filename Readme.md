@@ -123,7 +123,7 @@ vterminal --input .\test.mp4
 
 ### Plan de empaquetado (binarios precompilados)
 1. Definir comando global: `vterminal`
-2. Crear entrypoint `cmd/vterminal` (o renombrar `cmd/player`)
+2. Mantener `cmd/vterminal` como entrypoint único
 3. Generar binarios para Windows/macOS/Linux con `go build`
 4. Publicar releases con los binarios
 5. Documentar instalación: descarga binario, agregar al `PATH` y requerir FFmpeg externo

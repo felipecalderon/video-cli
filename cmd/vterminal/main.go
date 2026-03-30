@@ -590,7 +590,7 @@ func printBinaryHelp(name string, err error, explicitPath string) {
 		fmt.Fprintf(os.Stderr, "Ruta indicada: %s\n", filepath.Clean(explicitPath))
 	}
 	fmt.Fprintln(os.Stderr, "Ejemplo:")
-	fmt.Fprintf(os.Stderr, "  go run ./cmd/player --input .\\test.mp4 --%s C:\\ffmpeg\\bin\\%s.exe\n", name, name)
+	fmt.Fprintf(os.Stderr, "  go run ./cmd/vterminal --input .\\test.mp4 --%s C:\\ffmpeg\\bin\\%s.exe\n", name, name)
 }
 
 func defaultBlendForPreset(v string) float64 {
