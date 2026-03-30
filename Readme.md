@@ -93,6 +93,10 @@ go run ./cmd/vterminal --input .\test.mp4 --fps 15 --color auto --preset fast --
 
 ---
 
+## Dependencias
+- FFmpeg
+- yt-dlp
+
 ## Build cross-platform
 
 ### Windows (PowerShell)
@@ -101,6 +105,10 @@ go run ./cmd/vterminal --input .\test.mp4 --fps 15 --color auto --preset fast --
 ```
 
 ### macOS / Linux (bash)
+```bash
+chmod +x ./scripts/build.sh # Dar permisos de ejecución.
+```
+
 ```bash
 ./scripts/build.sh
 ```
