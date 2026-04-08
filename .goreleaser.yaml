@@ -27,9 +27,6 @@ builds:
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
-    # CGO deshabilitado para Windows (portabilidad máxima)
-    env:
-      - CGO_ENABLED=0
     goos:
       - windows
     goarch:
@@ -45,8 +42,6 @@ builds:
       - -X main.version={{.Version}}
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
-    env:
-      - CGO_ENABLED=0
     goos:
       - darwin
       - linux
