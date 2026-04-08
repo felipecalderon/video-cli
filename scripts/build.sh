@@ -21,5 +21,5 @@ for target in "${targets[@]}"; do
   export CGO_ENABLED=0
   out="${dist}/vterminal_${goos}_${goarch}${ext}"
   echo "Building ${out}"
-  go build -trimpath -ldflags "-s -w" -o "${out}" ./cmd/vterminal
+  go build -trimpath -ldflags "-s -w" -o "${out}" ../cmd/vterminal
 done
