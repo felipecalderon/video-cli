@@ -1,0 +1,116 @@
+# GoReleaser Configuration para video-terminal
+# Configuración explícita para el proyecto Motor Perceptual Adaptativo para Terminal
+# https://goreleaser.com
+
+version: 2
+
+# Project metadata
+project_name: video-terminal
+
+# Antes de compilar
+before:
+  hooks:
+    - go mod tidy
+    - go generate ./...
+
+# Configuración de builds
+builds:
+  # Build principal: vterminal CLI (Windows sin CGO)
+  - id: vterminal-windows
+    # Entrypoint del CLI
+    main: ./cmd/vterminal
+    # Flags de construcción
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    # CGO deshabilitado para Windows (portabilidad máxima)
+    env:
+      - CGO_ENABLED=0
+    goos:
+      - windows
+    goarch:
+      - amd64
+
+  # Build para macOS y Linux (con CGO habilitado para oto)
+  - id: vterminal-unix
+    main: ./cmd/vterminal
+    flags:
+      - -trimpath
+    ldflags:
+      - -s -w
+      - -X main.version={{.Version}}
+      - -X main.commit={{.Commit}}
+      - -X main.date={{.Date}}
+    env:
+      - CGO_ENABLED=1
+    goos:
+      - darwin
+      - linux
+    goarch:
+      - amd64
+      - arm64
+    ignore:
+      - goos: linux
+        goarch: arm64
+
+# Archivos generados
+archives:
+  - id: default
+    # Nombres de archivo personalizados
+    name_template: >-
+      {{ .ProjectName }}_
+      {{- title .Os }}_
+      {{- if eq .Arch "amd64" }}x86_64
+      {{- else if eq .Arch "386" }}i386
+      {{- else }}{{ .Arch }}{{ end }}
+    # Formato por SO
+    format_overrides:
+      - goos: windows
+        formats: [zip]
+      - goos: darwin
+        formats: [tar.gz]
+      - goos: linux
+        formats: [tar.gz]
+    # Agregar archivos adicionales
+    files:
+      - README.md
+      - LICENSE
+      - config.example.json
+
+# Snapshots (versiones no-release)
+
+# Changelog
+changelog:
+  sort: asc
+  abbrev: -1
+  filters:
+    exclude:
+      - "^docs:"
+      - "^test:"
+      - "^chore:"
+      - "^ci:"
+      - "^Merge pull request"
+
+# Release
+release:
+  name_template: "Release {{.Tag}}"
+  footer: |
+    ## Installation
+
+    Download the appropriate binary for your system from the assets below.
+
+    **Requirements:**
+    - FFmpeg must be installed and available in your PATH
+    - For Windows: PowerShell or Command Prompt
+    - For macOS/Linux: bash or sh
+
+    **Usage:**
+    ```bash
+    vterminal --input <video_file> --fps 15 --preset quality
+    ```
+
+    See README.md for full documentation.
