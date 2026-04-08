@@ -46,7 +46,7 @@ builds:
       - -X main.commit={{.Commit}}
       - -X main.date={{.Date}}
     env:
-      - CGO_ENABLED=1
+      - CGO_ENABLED=0
     goos:
       - darwin
       - linux
