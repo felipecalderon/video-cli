@@ -2,35 +2,35 @@
 
 ## Features (Done)
 
-- [x] Integración con FFmpeg (extraer frames)
-- [x] Render básico en terminal (color ANSI)
-- [x] Resize de frames a tamaño de terminal
-- [x] Loop de reproducción simple
-- [x] Separación de canales RGB
-- [x] Cuantización básica por canal
-- [x] Implementación de dithering simple (Bayer)
-- [x] Soporte para caracteres Unicode (`▀`, `▄`)
-- [x] Persistencia temporal (frame blending)
-- [x] Simulación de scanlines
-- [x] Modo “CRT” (intensidades y look perceptual)
+- [x] FFmpeg integration (extract frames)
+- [x] Basic terminal rendering (ANSI color)
+- [x] Resize frames to terminal size
+- [x] Simple playback loop
+- [x] RGB channel separation
+- [x] Basic per-channel quantization
+- [x] Simple dithering implementation (Bayer)
+- [x] Unicode character support (`▀`, `▄`)
+- [x] Temporal persistence (frame blending)
+- [x] Scanline simulation
+- [x] “CRT” mode (intensity and perceptual look)
 
-## Optimización (Done)
+## Optimization (Done)
 
-- [x] Diff rendering (solo cambios)
-- [x] Buffer doble (double buffering)
-- [x] Ajuste de FPS estable
-- [x] Optimización de escritura a stdout
-- [x] Reuso de buffers por frame (evita GC)
-- [x] Eliminar goroutine por frame en decoder
-- [x] Reuso de timer en pacing de FPS
-- [x] Evitar SGR redundante en salida ANSI
-- [x] Scanlines sin float por píxel (fixed-point)
+- [x] Diff rendering (only changes)
+- [x] Double buffering
+- [x] Stable FPS tuning
+- [x] Optimized stdout writes
+- [x] Reuse buffers per frame (avoid GC)
+- [x] Remove per-frame goroutine in decoder
+- [x] Reuse timer for FPS pacing
+- [x] Avoid redundant SGR in ANSI output
+- [x] Scanlines without per-pixel floats (fixed-point)
 
-## Pendientes
+## Pending
 
-- [x] Comando global `vterminal` (entrypoint `cmd/vterminal`)
-- [x] Scripts de build cross-platform (Windows/macOS/Linux)
-- [x] Arreglar fuga de memoria de rune a string en Differ
-- [ ] Escuchar SIGWINCH para redimensionamiento de terminal en caliente
-- [ ] Módulo de frame pacing suave (recuperación o skip de frames atrasados)
-- [ ] Corregir el redimensionamiento de terminal que rompe el video, más pequeño se rompe, al agrandar se queda del mismo tamaño original.
+- [x] Global command `vterminal` (entrypoint `cmd/vterminal`)
+- [x] Cross-platform build scripts (Windows/macOS/Linux)
+- [x] Fix rune-to-string memory leak in Differ
+- [ ] Listen to SIGWINCH for hot terminal resize
+- [ ] Smooth frame pacing module (recovery or skipping behind frames)
+- [ ] Fix terminal resize bug that breaks playback when smaller; enlarging leaves previous size unchanged.

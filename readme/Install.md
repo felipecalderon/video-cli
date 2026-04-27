@@ -1,65 +1,65 @@
-# Instalación sin Go (usuario final)
+# Installation without Go (end user)
 
-Objetivo: ejecutar `vterminal` sin tener Go instalado.
+Goal: run `vterminal` without having Go installed.
 
-## Requisitos
-- FFmpeg instalado y disponible en el `PATH`.
+## Requirements
+- FFmpeg installed and available on the system `PATH`.
 
-## Paso 1 — Descargar binario
-Descarga el binario correcto para tu sistema operativo y arquitectura.
+## Step 1 — Download the binary
+Download the binary that matches your OS and architecture.
 
-Ejemplos de nombres:
+Example names:
 - `vterminal_windows_amd64.exe`
 - `vterminal_linux_amd64`
 - `vterminal_darwin_arm64`
 
-## Paso 2 — Mover a una carpeta en el PATH (por OS)
+## Step 2 — Move to a folder in your PATH (by OS)
 
 ### Windows
-1. Crea una carpeta, por ejemplo `C:\Tools\bin\`
-2. Mueve `vterminal_windows_amd64.exe` a esa carpeta
-3. Agrega la carpeta al `PATH`:
+1. Create a folder, e.g. `C:\Tools\bin\`
+2. Move `vterminal_windows_amd64.exe` to that folder
+3. Add the folder to your `PATH`:
 ```powershell
 [Environment]::SetEnvironmentVariable("Path", $env:Path + ";C:\Tools\bin", "User")
 ```
-4. Abre una nueva terminal y valida:
+4. Open a new terminal and verify:
 ```powershell
 vterminal --help
 ```
 
 ### macOS
-1. Mueve el binario a `/usr/local/bin`:
+1. Move the binary to `/usr/local/bin`:
 ```bash
 sudo mv vterminal_darwin_arm64 /usr/local/bin/vterminal
 sudo chmod +x /usr/local/bin/vterminal
 ```
-2. Valida:
+2. Verify:
 ```bash
 vterminal --help
 ```
 
 ### Linux
-1. Mueve el binario a `/usr/local/bin`:
+1. Move the binary to `/usr/local/bin`:
 ```bash
 sudo mv vterminal_linux_amd64 /usr/local/bin/vterminal
 sudo chmod +x /usr/local/bin/vterminal
 ```
-2. Valida:
+2. Verify:
 ```bash
 vterminal --help
 ```
 
-## Paso 3 — Verificar instalación
+## Step 3 — Check installation
 ```bash
 vterminal --help
 ```
 
-## Paso 4 — Ejecutar
+## Step 4 — Run
 ```bash
 vterminal --input .\test.mp4
 ```
 
-Si FFmpeg no está en el PATH, indica rutas explícitas:
+If FFmpeg is not on the PATH, pass explicit paths:
 ```bash
 vterminal --input .\test.mp4 --ffmpeg C:\ffmpeg\bin\ffmpeg.exe --ffprobe C:\ffmpeg\bin\ffprobe.exe
 ```

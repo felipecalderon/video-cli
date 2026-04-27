@@ -1,56 +1,56 @@
-# Arquitectura — Borrador Inicial
+# Architecture — Initial Draft
 
-## Objetivo
-Definir módulos, límites, y flujo de datos para evitar decisiones implícitas cuando empiece el código.
-
----
-
-## Módulos propuestos
-
-- `ingest/` (FFmpeg + entrada de video)
-- `pipeline/` (procesamiento por etapas)
-- `render/` (mapeo a celdas + ANSI)
-- `diff/` (motor de diferencias)
-- `term/` (detección de capacidades + tamaño)
-- `timing/` (control de FPS + sincronización)
-- `profile/` (stats, métricas, perfiles)
+## Goal
+Define modules, boundaries, and data flow to avoid implicit decisions once implementation starts.
 
 ---
 
-## Pipeline lógico (etapas)
+## Proposed modules
 
-1. Decode (frames RGB)
-2. Resize a resolución de terminal
-3. Conversión de color/linealización (si aplica)
-4. Separación de canales
-5. Cuantización por canal
-6. Dithering por canal
-7. Mapeo a celdas (Unicode + ANSI)
-8. Diff (frame actual vs anterior)
+- `ingest/` (FFmpeg + video input)
+- `pipeline/` (stage-based processing)
+- `render/` (cell mapping + ANSI)
+- `diff/` (difference engine)
+- `term/` (capability detection + sizing)
+- `timing/` (FPS control + synchronization)
+- `profile/` (stats, metrics, profiling)
+
+---
+
+## Logical pipeline (stages)
+
+1. Decode (RGB frames)
+2. Resize to terminal resolution
+3. Color conversion / linearization (if applicable)
+4. Channel split
+5. Per-channel quantization
+6. Per-channel dithering
+7. Map to cells (Unicode + ANSI)
+8. Diff (current frame vs previous)
 9. Output (stdout)
 
 ---
 
-## Concurrencia (decisión pendiente)
+## Concurrency (pending decision)
 
-- ¿Pipeline por etapas con canales Go?
-- ¿Doble buffer con lock-free?
-- ¿Backpressure si stdout es lento?
-
----
-
-## Integración con FFmpeg (decisión pendiente)
-
-- Entrada: `ffmpeg` -> `rawvideo` por stdout
-- Formato: `rgb24` / `rgba` / `bgr24`
-- Sincronización: ¿timestamp externo o fijo por FPS objetivo?
+- Pipeline-per-stage with Go channels?
+- Lock-free double buffering?
+- Backpressure handling if stdout is slow?
 
 ---
 
-## Criterios de éxito del MVP (medibles)
+## FFmpeg integration (pending decision)
 
-- FPS sostenido ≥ 15
-- Latencia media < 120 ms
-- Uso CPU razonable en 1080p -> terminal 120x40
-- Diferencia perceptual clara vs ASCII básico
+- Input: `ffmpeg` -> `rawvideo` over stdout
+- Formats: `rgb24` / `rgba` / `bgr24`
+- Synchronization: external timestamps or fixed by target FPS?
+
+---
+
+## MVP success criteria (measurable)
+
+- Sustained FPS ≥ 15
+- Average latency < 120 ms
+- Reasonable CPU usage for 1080p -> terminal 120x40
+- Perceptible quality improvement vs basic ASCII
 

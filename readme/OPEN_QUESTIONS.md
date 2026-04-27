@@ -1,47 +1,47 @@
-# Preguntas abiertas críticas (antes de programar)
-# Estado: RESUELTAS (MVP)
+# Critical Open Questions (before implementing)
+# Status: RESOLVED (MVP)
 
-## Terminal y output
-- ¿Se asume soporte 24-bit ANSI? ¿Fallback 256?
-  - Decision: `truecolor` por defecto. Fallback a 256 si `COLORTERM` no es `truecolor` y `TERM` no contiene `256color`.
-  - CLI: `--color=auto|truecolor|256` para forzar.
-- ¿Se detecta `TERM` + capabilities o se asume fijo?
-  - Decision: heuristica simple en MVP (env vars). Terminfo completo se posterga.
-- ¿Cómo se maneja resize en tiempo real?
-  - Decision: escuchar `SIGWINCH`, recomputar `termW/termH`, realocar buffers, descartar frame en curso y continuar.
+## Terminal and output
+- Is 24-bit ANSI assumed? Fallback to 256?
+  - Decision: default to `truecolor`. Fallback to 256-color if `COLORTERM` is not `truecolor` and `TERM` does not contain `256color`.
+  - CLI: `--color=auto|truecolor|256` to force mode.
+- Detect `TERM` + capabilities or assume heuristics?
+  - Decision: simple heuristics for MVP (env vars). Full terminfo is postponed.
+- How to handle live resize?
+  - Decision: listen to `SIGWINCH`, recompute `termW/termH`, reallocate buffers, drop current frame and continue.
 
 ## Video input
-- ¿`ffmpeg` como proceso externo o librería embebida?
-  - Decision: `ffmpeg` como proceso externo (pipe `rawvideo rgb24` por stdout).
-- ¿Se soporta audio? (probablemente no para MVP)
-  - Decision: no audio en MVP.
-- ¿FPS fijo vs timestamp real del video?
-  - Decision: FPS fijo objetivo (ej. 15), forzado en `ffmpeg` con `-vf fps=`. Ignorar timestamps reales.
+- `ffmpeg` as an external process or embedded library?
+  - Decision: `ffmpeg` as external process (pipe `rawvideo rgb24` over stdout).
+- Is audio supported? (probably not for MVP)
+  - Decision: no audio in MVP.
+- Fixed FPS vs video timestamps?
+  - Decision: fixed target FPS (e.g., 15), enforced in `ffmpeg` via `-vf fps=`. Ignore real timestamps.
 
-## Rendimiento
-- ¿Presupuesto de CPU/RAM objetivo?
-  - Decision: objetivo MVP <= 1 core sostenido, RAM < 200 MB.
-- ¿Qué tamaño de terminal se considera “normal”?
+## Performance
+- CPU/RAM budget target?
+  - Decision: MVP target <= 1 sustained core, RAM < 200 MB.
+- What terminal size is considered “normal”?
   - Decision: 120x40 (cols x rows).
-- ¿Se prioriza FPS o calidad perceptual?
-  - Decision: FPS estable primero, calidad perceptual segunda.
+- Prioritize FPS or perceptual quality?
+  - Decision: stable FPS first, perceptual quality second.
 
-## Dithering y percepción
-- ¿Bayer fijo o adaptativo por región?
-  - Decision: Bayer fijo (4x4 y 8x8), sin adaptativo en MVP.
-- ¿Hay presets de calidad?
+## Dithering and perception
+- Fixed Bayer or region-adaptive?
+  - Decision: fixed Bayer (4x4 and 8x8), no adaptive dithering in MVP.
+- Are there quality presets?
   - Decision: `fast` (4x4), `quality` (8x8), `crt` (8x8 + temporal).
-- ¿Cómo se mide “mejora perceptual”?
-  - Decision: evaluacion visual + comparacion de error MSE vs baseline ASCII simple (solo para tuning interno).
+- How to measure "perceptual improvement"?
+  - Decision: visual evaluation + MSE comparison vs ASCII baseline (for internal tuning only).
 
 ## Diff rendering
-- ¿Hash por celda o comparar bytes directos?
-  - Decision: comparar bytes directos de `Cell` (top/bottom RGB + char).
-- ¿Se considera parpadeo como “cambio”?
-  - Decision: no. Solo cambios reales en el buffer.
+- Hash per cell or direct byte comparison?
+  - Decision: direct byte comparison of `Cell` (top/bottom RGB + char).
+- Is flicker considered a "change"?
+  - Decision: no. Only real buffer changes.
 
-## Formato de color
-- ¿Linearizar o quedarse en sRGB?
-  - Decision: sRGB directo en MVP (sin linearizar).
-- ¿Cuantización por canal (bits por canal)?
-  - Decision: 6 bits por canal (truecolor). En 256-color: paleta 6x6x6 (216).
+## Color format
+- Linearize or stay in sRGB?
+  - Decision: sRGB directly for MVP (no linearization).
+- Quantization per channel (bits per channel)?
+  - Decision: 6 bits per channel (truecolor). For 256-color: 6x6x6 palette (216).

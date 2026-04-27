@@ -1,65 +1,65 @@
-# Estructuras de datos — Borrador Inicial
+# Data Structures — Initial Draft
 
-## Unidades básicas (decidir explícitamente)
+## Basic units (decide explicitly)
 
-- **Pixel fuente**: del frame original (RGB 8-bit)
-- **Pixel de trabajo**: post-resize (RGB 8-bit o float)
-- **Celda terminal**: 1 carácter (2 subceldas verticales con `▀`/`▄`)
-- **Subcelda**: mitad superior/inferior de una celda
+- **Source pixel**: from the original frame (RGB 8-bit)
+- **Work pixel**: post-resize (RGB 8-bit or float)
+- **Terminal cell**: 1 character (2 vertical subcells using `▀`/`▄`)
+- **Subcell**: top/bottom half of a cell
 
 ---
 
-## Buffers mínimos necesarios
+## Minimum required buffers
 
 ### 1) FrameBuffer (source)
-- Dimensiones: `srcW`, `srcH`
-- Formato: `RGB24` (3 bytes por pixel)
-- Layout: interleaved `RGBRGB...` (decision MVP)
+- Dimensions: `srcW`, `srcH`
+- Format: `RGB24` (3 bytes per pixel)
+- Layout: interleaved `RGBRGB...` (MVP decision)
 
 ### 2) WorkBuffer (resized)
-- Dimensiones: `termW`, `termH*2` (si usamos `▀`/`▄`)
-- Formato: `RGB24` sRGB (decision MVP, sin linearizar)
-- Uso: base para dithering y mapeo a subceldas
+- Dimensions: `termW`, `termH*2` (if `▀`/`▄` are used)
+- Format: `RGB24` sRGB (MVP decision, no linearization)
+- Purpose: base for dithering and subcell mapping
 
 ### 3) ChannelBuffers (R/G/B)
-- 3 buffers `uint8` o `float`
-- Opcional: compartir con `WorkBuffer` (vista / slice)
+- 3 buffers of `uint8` or `float`
+- Optional: views/slices into WorkBuffer to avoid copies
 
 ### 4) DitherState
-- Matriz Bayer o error diffusion
-- Estado persistente (si hay dithering temporal)
+- Bayer matrix or error-diffusion state
+- Persistent state (if temporal dithering is used)
 
 ### 5) CellBuffer (render target)
-- Dimensiones: `termW x termH`
-- Cada celda contiene:
+- Dimensions: `termW x termH`
+- Each cell contains:
   - `rTop,gTop,bTop`
   - `rBottom,gBottom,bBottom`
-  - `rFinal,gFinal,bFinal` (si hay fusión)
+  - `rFinal,gFinal,bFinal` (if blending applied)
   - `char` (`▀`, `▄`, ` `)
 
-### 6) DiffBuffer (prev frame)
-- Hash por celda o comparación directa
-- Opcional: también guardar último ANSI emitido
+### 6) DiffBuffer (previous frame)
+- Per-cell hash or direct comparison data
+- Optional: store last emitted ANSI sequences
 
 ---
 
-## Formatos y precisión (decidir)
+## Formats and precision (decide)
 
-- Decision: trabajar en `sRGB` directo (sin linearizar) para MVP
-- Decision: cuantizacion 6 bits por canal (truecolor); 6x6x6 en 256-color
-- ¿Dithering spatial o temporal primero?
-
----
-
-## Modelo de persistencia temporal (si aplica)
-
-- Acumular N frames (simple EMA)
-- Mezcla: `new = alpha*current + (1-alpha)*prev`
-- Necesita `TemporalBuffer` en float
+- Decision: operate in `sRGB` directly (no linearization) for MVP
+- Decision: quantize to 6 bits per channel for truecolor; 6x6x6 palette for 256-color mode
+- Question: apply spatial or temporal dithering first?
 
 ---
 
-## Estructuras recomendadas (borrador Go)
+## Temporal persistence model (if applicable)
+
+- Accumulate N frames (simple EMA)
+- Blend: `new = alpha*current + (1-alpha)*prev`
+- Requires a `TemporalBuffer` in float
+
+---
+
+## Recommended structures (Go draft)
 
 ```go
 type Frame struct {
