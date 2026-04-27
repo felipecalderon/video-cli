@@ -47,7 +47,7 @@ go run ./cmd/vterminal --input .\test.mp4
 
 Video input (FFmpeg) → Frame buffer → RGB channel split → Adaptive quantization & dithering → Char mapping + ANSI → Diff engine → Terminal output
 
-For design decisions and architecture details see readme/ARCHITECTURE.md.
+For design decisions and architecture details see [readme/ARCHITECTURE.md](readme/ARCHITECTURE.md).
 
 ## Configuration
 
@@ -60,11 +60,11 @@ Benchmarks and performance numbers are in progress. See readme/Todo.md for plann
 ## Examples & advanced usage
 
 - Pipe from yt-dlp, use presets, or tune `--fps`/`--preset`
-- See readme/MOCK_FLOW.md for common pipelines
+- See [readme/MOCK_FLOW.md](readme/MOCK_FLOW.md) for common pipelines
 
 ## Contributing
 
-Bug reports and PRs welcome. See CONTRIBUTING.md.
+Bug reports and PRs welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
 ## License
 
