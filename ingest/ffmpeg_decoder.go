@@ -44,7 +44,12 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps 
 	if err != nil {
 		return nil, fmt.Errorf("create audio listener: %w", err)
 	}
-	defer ln.Close()
+	// FIX: eliminado "defer ln.Close()" del cuerpo principal.
+	// El ownership del listener pasa a la goroutine de copia de audio,
+	// que lo cierra inmediatamente tras aceptar la conexión (ver abajo).
+	// Cerrar aquí además causaba una race condition: el defer del cuerpo
+	// corría al retornar NewFFmpegDecoder, justo cuando la goroutine
+	// acababa de arrancar, resultando en un doble Close concurrente.
 
 	port := ln.Addr().(*net.TCPAddr).Port
 
@@ -86,10 +91,12 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps 
 
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
+		ln.Close()
 		return nil, fmt.Errorf("create ffmpeg stdout pipe: %w", err)
 	}
 
 	if err := cmd.Start(); err != nil {
+		ln.Close()
 		return nil, fmt.Errorf("start ffmpeg: %w", err)
 	}
 
@@ -108,20 +115,60 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps 
 	case res := <-resChan:
 		if res.err != nil {
 			_ = cmd.Process.Kill()
+			ln.Close()
 			return nil, fmt.Errorf("audio connection failed: %w", res.err)
 		}
 
 		audioReader, audioWriter := io.Pipe()
+
+		// FIX: la goroutine toma ownership completo del listener y la conexión.
+		//
+		// Cambios respecto al original:
+		//   1. ln.Close() se llama al INICIO de la goroutine, no al final.
+		//      El listener solo sirve para aceptar la conexión inicial; una vez
+		//      aceptada ya no se necesita y puede cerrarse de inmediato.
+		//      Antes se cerraba al final, conviviendo con el defer del cuerpo
+		//      principal — dos cierres concurrentes sobre el mismo fd.
+		//
+		//   2. Se reemplaza io.Copy por un loop manual con select sobre ctx.Done().
+		//      io.Copy es bloqueante y no respeta cancelación de contexto: si el
+		//      usuario hacía seek o salía, la goroutine quedaba huérfana hasta que
+		//      FFmpeg cerraba la conexión por su cuenta (potencialmente nunca en
+		//      streams). El loop manual permite salir limpiamente en O(32KB) de latencia.
 		go func() {
-			defer ln.Close()
+			// Cerramos el listener aquí: ya aceptamos la única conexión que
+			// necesitábamos y no queremos mantener el fd abierto innecesariamente.
+			ln.Close()
 			defer res.conn.Close()
 
-			_, copyErr := io.Copy(audioWriter, res.conn)
-			if copyErr != nil {
-				_ = audioWriter.CloseWithError(copyErr)
-				return
+			buf := make([]byte, 32*1024)
+			for {
+				// Chequeamos cancelación antes de cada Read para salir
+				// sin esperar a que FFmpeg cierre la conexión.
+				select {
+				case <-ctx.Done():
+					_ = audioWriter.CloseWithError(ctx.Err())
+					return
+				default:
+				}
+
+				n, err := res.conn.Read(buf)
+				if n > 0 {
+					if _, werr := audioWriter.Write(buf[:n]); werr != nil {
+						// El lector cerró el pipe (e.g. Close() en el decoder);
+						// no hay a dónde escribir, salimos silenciosamente.
+						return
+					}
+				}
+				if err != nil {
+					if err == io.EOF {
+						_ = audioWriter.Close()
+					} else {
+						_ = audioWriter.CloseWithError(err)
+					}
+					return
+				}
 			}
-			_ = audioWriter.Close()
 		}()
 
 		return &FFmpegDecoder{
@@ -133,8 +180,10 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps 
 			width:       width,
 			height:      height,
 		}, nil
+
 	case <-time.After(10 * time.Second):
 		_ = cmd.Process.Kill()
+		ln.Close()
 		msg := strings.TrimSpace(stderr.String())
 		if msg == "" {
 			msg = "timeout sin logs de error"

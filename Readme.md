@@ -26,13 +26,19 @@ After install, run the CLI as `vterminal`.
 Play a local file:
 
 ```bash
+vterminal --input ./test.mp4
+```
+
+Play a YouTube video (requires [yt-dlp](https://github.com/yt-dlp/yt-dlp) installed):
+
+```bash
 vterminal --input https://youtube.com/...
 ```
 
 If you prefer to run from source:
 
 ```bash
-go run ./cmd/vterminal --input .\test.mp4
+go run ./cmd/vterminal --input ./test.mp4
 ```
 
 ## Highlights
