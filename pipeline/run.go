@@ -135,12 +135,12 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			work = scanned
 		}
 
-		dithered, err := p.Dither.Dither(ctx, work, params.Preset)
+		quantized, err := p.Quantizer.Quantize(ctx, work, params.ColorMode)
 		if err != nil {
 			return err
 		}
 
-		quantized, err := p.Quantizer.Quantize(ctx, dithered, params.ColorMode)
+		dithered, err := p.Dither.Dither(ctx, quantized, params.Preset)
 		if err != nil {
 			return err
 		}
@@ -148,12 +148,12 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		var grid types.CellGrid
 		if supportsReuse {
 			curr := &buffers[currIdx]
-			if err := mapperInto.MapInto(ctx, quantized, curr); err != nil {
+			if err := mapperInto.MapInto(ctx, dithered, curr); err != nil {
 				return err
 			}
 			grid = *curr
 		} else {
-			mapped, err := p.Mapper.Map(ctx, quantized)
+			mapped, err := p.Mapper.Map(ctx, dithered)
 			if err != nil {
 				return err
 			}

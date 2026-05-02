@@ -419,7 +419,7 @@ func main() {
 
 	baseOffset := time.Duration(0)
 	for {
-		seekDelta, shouldSeek, err := runPlaybackSession(ctx, playbackSessionParams{
+		seekDelta, currentPos, shouldSeek, err := runPlaybackSession(ctx, playbackSessionParams{
 			Input:      *input,
 			BaseOffset: baseOffset,
 			FPS:        fps,
@@ -445,7 +445,7 @@ func main() {
 			os.Exit(1)
 		}
 		if shouldSeek {
-			baseOffset += seekDelta
+			baseOffset = currentPos + seekDelta
 			if baseOffset < 0 {
 				baseOffset = 0
 			}
@@ -475,13 +475,14 @@ type playbackSessionParams struct {
 	Output     pipeline.Output
 }
 
-func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time.Duration, bool, error) {
+func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time.Duration, time.Duration, bool, error) {
+	sessionStart := time.Now()
 	sessionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
 	decoder, err := ingest.NewFFmpegDecoder(sessionCtx, params.Input, params.VideoW, params.VideoH, params.FPS, params.FFmpegPath, params.IsStream, params.BaseOffset)
 	if err != nil {
-		return 0, false, err
+		return 0, 0, false, err
 	}
 	defer func() {
 		if sessionCtx.Err() != nil || ctx.Err() != nil {
@@ -536,7 +537,7 @@ func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time
 
 	if params.SeekCh == nil {
 		err = <-done
-		return 0, false, err
+		return 0, 0, false, err
 	}
 
 	for {
@@ -545,7 +546,7 @@ func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time
 			cancel()
 			_ = decoder.Close()
 			<-done
-			return 0, false, ctx.Err()
+			return 0, 0, false, ctx.Err()
 		case delta, ok := <-params.SeekCh:
 			if !ok {
 				params.SeekCh = nil
@@ -553,9 +554,16 @@ func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time
 			}
 			cancel()
 			_ = decoder.Close()
-			return delta, true, nil
+
+			var currentPos time.Duration
+			if audioClock != nil {
+				currentPos = params.BaseOffset + audioClock.CurrentTime()
+			} else {
+				currentPos = params.BaseOffset + time.Since(sessionStart)
+			}
+			return delta, currentPos, true, nil
 		case err = <-done:
-			return 0, false, err
+			return 0, 0, false, err
 		}
 	}
 }
@@ -633,12 +641,6 @@ func isValidColor(v string) bool {
 	}
 }
 
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}
 
 func computeTermSize(termWOverride, termHOverride int, scale float64) (int, int) {
 	actualW, actualH := term.GetSize()
@@ -646,10 +648,10 @@ func computeTermSize(termWOverride, termHOverride int, scale float64) (int, int)
 	termH := actualH
 
 	if termWOverride > 0 {
-		termW = minInt(termWOverride, actualW)
+		termW = min(termWOverride, actualW)
 	}
 	if termHOverride > 0 {
-		termH = minInt(termHOverride, actualH)
+		termH = min(termHOverride, actualH)
 	}
 
 	if scale != 1 {

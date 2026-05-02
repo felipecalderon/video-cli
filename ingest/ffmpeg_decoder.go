@@ -55,7 +55,7 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps 
 
 	args := []string{
 		"-hide_banner",
-		"-loglevel", "error",
+		"-loglevel", "warning",
 	}
 
 	if isStream {
@@ -181,7 +181,7 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps 
 			height:      height,
 		}, nil
 
-	case <-time.After(10 * time.Second):
+	case <-time.After(30 * time.Second):
 		_ = cmd.Process.Kill()
 		ln.Close()
 		msg := strings.TrimSpace(stderr.String())
@@ -253,6 +253,9 @@ func (d *FFmpegDecoder) Close() error {
 	}
 
 	if d.cmd != nil {
+		if d.cmd.Process != nil {
+			_ = d.cmd.Process.Kill()
+		}
 		_ = d.cmd.Wait()
 	}
 

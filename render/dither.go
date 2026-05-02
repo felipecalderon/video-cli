@@ -128,10 +128,10 @@ func tileContrast(luma []uint8, w, h, tileX, tileY, tileSize int) int {
 		return 0
 	}
 
-	x1 := minInt(x0+tileSize-1, w-1)
-	y1 := minInt(y0+tileSize-1, h-1)
-	mx := minInt(x0+tileSize/2, w-1)
-	my := minInt(y0+tileSize/2, h-1)
+	x1 := min(x0+tileSize-1, w-1)
+	y1 := min(y0+tileSize-1, h-1)
+	mx := min(x0+tileSize/2, w-1)
+	my := min(y0+tileSize/2, h-1)
 
 	a := int(luma[y0*w+x0])
 	b := int(luma[y0*w+x1])
@@ -150,7 +150,7 @@ func buildBiasTable(area, maxBias int) [5][64]int {
 	}
 
 	for biasRange := 0; biasRange <= maxBias && biasRange < len(table); biasRange++ {
-		for threshold := 0; threshold < 64; threshold++ {
+		for threshold := 0; threshold < area; threshold++ {
 			table[biasRange][threshold] = threshold*((biasRange*2)+1)/area - biasRange
 		}
 	}
@@ -185,9 +185,3 @@ func absInt(v int) int {
 	return v
 }
 
-func minInt(a, b int) int {
-	if a < b {
-		return a
-	}
-	return b
-}

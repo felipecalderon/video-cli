@@ -42,13 +42,15 @@ func (d *ByteDiffer) Diff(ctx context.Context, curr types.CellGrid, prev *types.
 				return
 			}
 
+			textCopy := make([]rune, len(d.runes)-runStartIdx)
+			copy(textCopy, d.runes[runStartIdx:])
 			ops = append(ops, types.DiffOp{
 				X:    rowStart,
 				Y:    y,
 				FG:   run.Top,
 				BG:   run.Bottom,
 				Ch:   run.Ch,
-				Text: d.runes[runStartIdx:],
+				Text: textCopy,
 			})
 			rowStart = -1
 			runStartIdx = len(d.runes)

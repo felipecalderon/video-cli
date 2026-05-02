@@ -5,6 +5,7 @@ import (
 	"context"
 	"io"
 	"strconv"
+	"unicode/utf8"
 	"video-terminal/types"
 )
 
@@ -99,10 +100,7 @@ func rgbToANSI256(c [3]uint8) int {
 }
 
 func appendRuneUTF8(dst []byte, r rune) []byte {
-	if r < 0x80 {
-		return append(dst, byte(r))
-	}
-	return append(dst, string(r)...)
+	return utf8.AppendRune(dst, r)
 }
 
 func (o *ANSIOutput) Clear(ctx context.Context) error {

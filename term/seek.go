@@ -35,6 +35,11 @@ func WatchSeek(ctx context.Context, step time.Duration) <-chan time.Duration {
 	}
 
 	go func() {
+		<-ctx.Done()
+		restore()
+	}()
+
+	go func() {
 		defer restore()
 		defer close(ch)
 

@@ -54,7 +54,19 @@ func (p *Player) CurrentTime() time.Duration {
 	if p.started.IsZero() {
 		return 0
 	}
-	return time.Since(p.started)
+
+	var latency time.Duration
+	if p.player != nil {
+		bytesBuffered := p.player.BufferedSize()
+		// 44100 Hz, 2 channels, 2 bytes/sample = 176400 bytes/sec
+		latency = time.Duration(bytesBuffered) * time.Second / 176400
+	}
+
+	t := time.Since(p.started) - latency
+	if t < 0 {
+		return 0
+	}
+	return t
 }
 
 func (p *Player) Close() error {
