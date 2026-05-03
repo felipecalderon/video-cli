@@ -249,6 +249,8 @@ func main() {
 
 	ffmpegPath := flag.String("ffmpeg", "", "Path to ffmpeg binary")
 	ffprobePath := flag.String("ffprobe", "", "Path to ffprobe binary")
+	profileFlag := flag.Bool("profile", false, "Enable profiling HUD overlay")
+	profileLogFlag := flag.String("profile-log", "", "Path to write profile metrics as JSON")
 	flag.Parse()
 
 	if strings.TrimSpace(*input) == "" {
@@ -432,6 +434,8 @@ func main() {
 			VideoW:     videoW,
 			VideoH:     videoH,
 			IsStream:   isStream,
+			Profile:    *profileFlag,
+			ProfileLog: *profileLogFlag,
 			ResizeChan: resizeEvents,
 			SeekCh:     seekCh,
 			SeekStep:   seekStep,
@@ -469,6 +473,8 @@ type playbackSessionParams struct {
 	VideoW     int
 	VideoH     int
 	IsStream   bool
+	Profile    bool
+	ProfileLog string
 	ResizeChan <-chan [2]int
 	SeekCh     <-chan time.Duration
 	SeekStep   time.Duration
@@ -528,6 +534,8 @@ func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time
 		BlendAlpha: params.BlendAlpha,
 		ResizeChan: params.ResizeChan,
 		Clock:      audioClock,
+		Profile:    params.Profile,
+		ProfileLog: params.ProfileLog,
 	}
 
 	done := make(chan error, 1)

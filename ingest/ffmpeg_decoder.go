@@ -235,6 +235,29 @@ func (d *FFmpegDecoder) Next(ctx context.Context) (types.FrameRGB, error) {
 	}, nil
 }
 
+func (d *FFmpegDecoder) NextInto(ctx context.Context, frame *types.FrameRGB) error {
+	if d == nil || d.stdout == nil {
+		return io.EOF
+	}
+
+	if cap(frame.Pix) < d.frameSize {
+		frame.Pix = make([]byte, d.frameSize)
+	}
+	frame.Pix = frame.Pix[:d.frameSize]
+	frame.W = d.width
+	frame.H = d.height
+	frame.Stride = d.width * 3
+
+	if _, err := io.ReadFull(d.stdout, frame.Pix); err != nil {
+		if err == io.EOF || err == io.ErrUnexpectedEOF {
+			return io.EOF
+		}
+		return fmt.Errorf("read ffmpeg frame into: %w", err)
+	}
+
+	return nil
+}
+
 func (d *FFmpegDecoder) Close() error {
 	if d == nil {
 		return nil

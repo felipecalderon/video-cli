@@ -7,6 +7,7 @@ import (
 
 type Decoder interface {
 	Next(ctx context.Context) (types.FrameRGB, error)
+	NextInto(ctx context.Context, frame *types.FrameRGB) error
 }
 
 type Resizer interface {

@@ -61,4 +61,6 @@ type PipelineParams struct {
 	BlendAlpha   float64
 	ResizeChan   <-chan [2]int
 	Clock        Clock // Master clock for A/V sync (Opcional)
+	Profile      bool
+	ProfileLog   string
 }
