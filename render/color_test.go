@@ -1,7 +1,6 @@
 package render
 
 import (
-	"context"
 	"testing"
 	"video-terminal/types"
 )
@@ -14,7 +13,7 @@ func TestChannelQuantizerQuantizesPerChannel(t *testing.T) {
 		Pix:    []byte{10, 128, 250, 33, 77, 199},
 	}
 
-	out, err := ChannelQuantizer{}.Quantize(nil, in, types.ColorTruecolor)
+	out, err := ChannelQuantizer{}.Quantize(t.Context(), in, types.ColorTruecolor)
 	if err != nil {
 		t.Fatalf("Quantize returned error: %v", err)
 	}
@@ -41,12 +40,12 @@ func TestBayerDitherAppliesSpatialVariation(t *testing.T) {
 		in.Pix[i] = 120
 	}
 
-	quantized, err := ChannelQuantizer{}.Quantize(nil, in, types.ColorTruecolor)
+	quantized, err := ChannelQuantizer{}.Quantize(t.Context(), in, types.ColorTruecolor)
 	if err != nil {
 		t.Fatalf("Quantize returned error: %v", err)
 	}
 
-	out, err := (&BayerDither{}).Dither(nil, quantized, types.PresetFast)
+	out, err := (&BayerDither{}).Dither(t.Context(), quantized, types.PresetFast)
 	if err != nil {
 		t.Fatalf("Dither returned error: %v", err)
 	}
@@ -96,9 +95,8 @@ func BenchmarkBayerDitherQuality(b *testing.B) {
 	}
 
 	d := &BayerDither{}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
-		if _, err := d.Dither(context.Background(), in, types.PresetQuality); err != nil {
+	for b.Loop() {
+		if _, err := d.Dither(b.Context(), in, types.PresetQuality); err != nil {
 			b.Fatal(err)
 		}
 	}

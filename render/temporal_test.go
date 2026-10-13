@@ -45,8 +45,8 @@ func BenchmarkTemporalBlend(b *testing.B) {
 		in.Pix[i] = byte(i)
 	}
 
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	
+	for b.Loop() {
 		if _, err := bl.Blend(context.Background(), in, 0.3); err != nil {
 			b.Fatal(err)
 		}

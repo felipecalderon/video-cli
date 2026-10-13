@@ -40,8 +40,8 @@ func BenchmarkScanlineCRT(b *testing.B) {
 	}
 
 	e := ScanlineEffect{}
-	b.ResetTimer()
-	for i := 0; i < b.N; i++ {
+	
+	for b.Loop() {
 		if _, err := e.Apply(context.Background(), in, types.PresetCRT); err != nil {
 			b.Fatal(err)
 		}

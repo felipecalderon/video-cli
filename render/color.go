@@ -28,7 +28,7 @@ func quantizeChannel(c uint8, levels int) uint8 {
 		return c
 	}
 
-	idx := int(c) * (levels - 1) / 255
+	idx := (int(c)*(levels-1) + 127) / 255
 	if idx < 0 {
 		idx = 0
 	}
