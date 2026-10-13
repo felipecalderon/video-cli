@@ -72,7 +72,7 @@ func NewFFmpegDecoder(ctx context.Context, inputPath string, width, height, fps 
 
 	args = append(args,
 		"-i", inputPath,
-		"-vf", fmt.Sprintf("fps=%d", fps),
+		"-vf", fmt.Sprintf("scale=%d:%d:flags=area,fps=%d", width, height, fps),
 		"-f", "rawvideo",
 		"-pix_fmt", "rgb24",
 		"pipe:1",

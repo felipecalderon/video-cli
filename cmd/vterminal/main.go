@@ -421,6 +421,7 @@ func main() {
 
 	baseOffset := time.Duration(0)
 	for {
+		termW, termH = computeTermSize(termWOverride, termHOverride, scale)
 		seekDelta, currentPos, shouldSeek, err := runPlaybackSession(ctx, playbackSessionParams{
 			Input:      *input,
 			BaseOffset: baseOffset,
@@ -486,7 +487,9 @@ func runPlaybackSession(ctx context.Context, params playbackSessionParams) (time
 	sessionCtx, cancel := context.WithCancel(ctx)
 	defer cancel()
 
-	decoder, err := ingest.NewFFmpegDecoder(sessionCtx, params.Input, params.VideoW, params.VideoH, params.FPS, params.FFmpegPath, params.IsStream, params.BaseOffset)
+	targetW := params.TermW
+	targetH := params.TermH * 2
+	decoder, err := ingest.NewFFmpegDecoder(sessionCtx, params.Input, targetW, targetH, params.FPS, params.FFmpegPath, params.IsStream, params.BaseOffset)
 	if err != nil {
 		return 0, 0, false, err
 	}

@@ -209,17 +209,17 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 			work = scanned
 		}
 
-		tQuant := time.Now()
-		quantized, err := p.Quantizer.Quantize(ctx, work, params.ColorMode)
-		timers.Quantize.Mark(time.Since(tQuant))
+		tDither := time.Now()
+		dithered, err := p.Dither.Dither(ctx, work, params.Preset)
+		timers.Dither.Mark(time.Since(tDither))
 		if err != nil {
 			pool.Release(slot)
 			return err
 		}
 
-		tDither := time.Now()
-		dithered, err := p.Dither.Dither(ctx, quantized, params.Preset)
-		timers.Dither.Mark(time.Since(tDither))
+		tQuant := time.Now()
+		quantized, err := p.Quantizer.Quantize(ctx, dithered, params.ColorMode)
+		timers.Quantize.Mark(time.Since(tQuant))
 		if err != nil {
 			pool.Release(slot)
 			return err
@@ -227,12 +227,12 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 
 		tMap := time.Now()
 		if supportsReuse {
-			if err := mapperInto.MapInto(ctx, dithered, &slot.Grid); err != nil {
+			if err := mapperInto.MapInto(ctx, quantized, &slot.Grid); err != nil {
 				pool.Release(slot)
 				return err
 			}
 		} else {
-			mapped, err := p.Mapper.Map(ctx, dithered)
+			mapped, err := p.Mapper.Map(ctx, quantized)
 			if err != nil {
 				pool.Release(slot)
 				return err
@@ -293,10 +293,10 @@ func (p Pipeline) Run(ctx context.Context, params types.PipelineParams) error {
 		// Wait, if we release the slot, the grid might be reused!
 		// So we must COPY the grid or HOLD two slots.
 		// For simplicity, let's copy the grid to a persistent buffer in prev.
-		if prev == nil {
+		if prev == nil || prev.W != slot.Grid.W || prev.H != slot.Grid.H {
 			prev = &types.CellGrid{}
+			copyGrid(prev, &slot.Grid)
 		}
-		copyGrid(prev, &slot.Grid)
 
 		pool.Release(slot)
 		timers.FrameTotal.Mark(time.Since(loopStart))

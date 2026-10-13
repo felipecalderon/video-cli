@@ -1,173 +1,75 @@
-## Evaluación inicial
+# Diagnóstico Técnico y Plan de Optimización del Pipeline
 
-El pipeline actual (`pipeline/run.go`) es una cadena secuencial en un solo goroutine: cada frame bloquea todas las etapas antes de pasar al siguiente. Esto tiene dos consecuencias directas:
-
-1. No hay manera de saber cuál etapa es el cuello de botella — perfilar sin instrumentación es adivinanza.
-2. Cualquier intento de añadir concurrencia antes de medir va a optimizar la etapa equivocada.
-
-El orden correcto es: **medir primero, concurrenciar después**. Lo que sigue respeta ese orden.
+Documento de auditoría del pipeline de renderizado de video en terminal (`video-terminal`).
 
 ---
 
-## Fase 1 — Infraestructura de profiling
+## 1. Arquitectura y Flujo de Ejecución
 
-### 1.1 Ring buffer de timings por etapa
+### Renderizado por bloques
+- Cada celda del terminal proyecta 2 píxeles verticales mediante el carácter de medio bloque `▀` (`U+2580`):
+  - **Foreground (FG):** píxel superior.
+  - **Background (BG):** píxel inferior.
+- **Resolución efectiva de video:** `TermW × (TermH · 2)`.  
+  *Ejemplo:* En una ventana de 120×40 celdas, la resolución interna es de **120×80 píxeles**.
 
-Definir una estructura `StageTimer` con un ring buffer de duración fija (ej. últimos 120 frames). Cada etapa del pipeline recibe un puntero a su timer. La medición es un `time.Now()` antes y un `Mark(duration)` después — sin allocations, sin mutex en el hot path (puede usar un índice atómico).
-
-Las etapas a instrumentar son exactamente las del pipeline actual:
-
-- `Decode` (incluye el `ReadFull` sobre el pipe de FFmpeg)
-- `Resize`
-- `TemporalBlend`
-- `Scanline`
-- `Quantize`
-- `Dither`
-- `Map`
-- `Diff`
-- `Output.Write + Flush`
-- `SyncWait` (el tiempo que el goroutine duerme esperando al audio)
-- `FrameTotal` (duración de punta a punta por frame)
-
-### 1.2 Métricas derivadas
-
-Del ring buffer calcular en tiempo real: p50, p95, p99 por etapa. Además:
-
-- **Frame budget**: `targetDuration - FrameTotal`. Negativo = el pipeline no cumple el FPS objetivo.
-- **AV drift**: `pts - audioClock.CurrentTime()` en el momento de renderizado — cuánto está adelantado o atrasado el video respecto al audio.
-- **Skip rate**: frames descartados por segundo por el bloque de sincronía.
-- **GC pressure**: `runtime.ReadMemStats` muestreado cada N frames (no por frame), para detectar allocations que escapan a la pila.
-
-### 1.3 Modo de exposición
-
-Agregar un flag `--profile` que activa un overlay en la última fila del terminal. El overlay usa el mismo `ANSIOutput` pero con coordenadas reservadas (última fila). No requiere un goroutine separado — se escribe al final de cada `Output.Write`.
-
-Formato sugerido (una línea, ej.):
-
-```
-fps:18/30  decode:2.1ms  dither:8.4ms  output:1.2ms  sync:+12ms  skip:0/s
-```
-
-Alternativa para debugging offline: `--profile-log path` que escribe JSON con los percentiles cada segundo a un archivo.
+### Ciclo por frame ([pipeline/run.go](file:///d:/programacion/video-terminal/pipeline/run.go))
+1. **Decodificación ([ingest/ffmpeg_decoder.go](file:///d:/programacion/video-terminal/ingest/ffmpeg_decoder.go)):** FFmpeg extrae `rawvideo rgb24` por `stdout` (`pipe:1`) con `-vf fps=N`. El audio (`s16le`, 44.1 kHz, estéreo) sale por un socket TCP local hacia el reloj maestro.
+2. **Sincronización A/V:** El reloj de audio comanda el ritmo. Si el frame de video adelanta >10 ms, duerme en timer. Si atrasa >25 ms, descarta frames del canal de prefetch (hasta `FpsTarget` por ciclo).
+3. **Resize ([render/resize.go](file:///d:/programacion/video-terminal/render/resize.go)):** Vecino más cercano ajustado a `TermW × (TermH · 2)`.
+4. **Temporal Blend (opcional):** Mezcla ponderada con el frame previo (`BlendAlpha`).
+5. **Scanline (opcional, presets CRT/Quality):** Atenuación de líneas y simulación de máscara de fósforo RGB.
+6. **Cuantización ([render/quantizer.go](file:///d:/programacion/video-terminal/render/quantizer.go)):** 64 niveles/canal en Truecolor, 6 niveles/canal en ANSI-256.
+7. **Dither ([render/dither.go](file:///d:/programacion/video-terminal/render/dither.go)):** Matriz Bayer 4×4 o 8×8 según contraste local.
+8. **Mapper ([render/mapper.go](file:///d:/programacion/video-terminal/render/mapper.go)):** Empaqueta pares de píxeles en celdas `Cell{Top, Bottom, '▀'}`.
+9. **Diff ([diff/byte_differ.go](file:///d:/programacion/video-terminal/diff/byte_differ.go)):** Compara celda a celda contra el frame anterior (`curr != prev`) y agrupa celdas contiguas idénticas en corridas (`DiffOp`).
+10. **Emisión ANSI ([render/output.go](file:///d:/programacion/video-terminal/render/output.go)):** Genera secuencias de cursor `\x1b[y;xH` y color `\x1b[38;2;...;48;2;...m`, escribe los bloques `▀` y hace flush a un buffer de 64 KB.
 
 ---
 
-## Fase 2 — Protocolo de medición
+## 2. Fallos Críticos y Cuellos de Botella
 
-Antes de tocar el pipeline concurrente, ejecutar estos escenarios con el profiling activado y documentar los resultados:
+### A. I/O y Decodificación
+1. **Transferencia de resolución completa por pipe:**
+   FFmpeg decodifica y transfiere la resolución nativa original (e.g. 1080p a 60 fps ≈ 370 MB/s de memoria sin comprimir) a través del pipe anónimo para luego descartar el 95% de los píxeles en Go con vecino más cercano. Desperdicio masivo de ancho de banda IPC, memoria y ciclos de CPU.
+2. **Deformación por Aspect Ratio:**
+   El reescalado fuerza `src.W -> TermW` y `src.H -> TermH*2` sin calcular letterboxing/pillarboxing, distorsionando cualquier video cuya relación de aspecto no coincida con el ratio de celdas del terminal.
+3. **Aliasing severo:**
+   El muestreo por vecino más cercano con factores de reducción altos (~16:1) genera parpadeo temporal de alta frecuencia y bordes dentados.
 
-**Escenario base**: 1080p → terminal 160×45, 30fps objetivo, preset `quality`.
-**Escenario degradado**: misma config pero terminal de 220×60 (más carga en dither y output).
-**Escenario I/O**: stream remoto via yt-dlp a 480p, 15fps.
+### B. Color y Procesamiento Gráfico
+4. **Inversión de orden Dither / Cuantización (Dither inoperante):**
+   En [pipeline/run.go:L212-L226](file:///d:/programacion/video-terminal/pipeline/run.go#L212-L226), el pipeline ejecuta `Quantize()` y luego `Dither()`. El dither suma un sesgo Bayer a valores que ya fueron redondeados a la cuadrícula fija sin volver a cuantizar.
+   - **Efecto:** No distribuye el error de cuantización; añade ruido estructurado sobre una imagen posterizada y rompe la uniformidad cromática, impidiendo que el Differ fusione corridas.
+5. **Mapeo ANSI 256 deficiente:**
+   [render/output.go:L95-L100](file:///d:/programacion/video-terminal/render/output.go#L95-L100) usa un cubo 6×6×6 con truncamiento entero (`c * 5 / 255`) en lugar de redondeo (`(c * 5 + 127) / 255`), y descarta por completo los 24 niveles dedicados de la rampa de grises (códigos ANSI 232–255).
+6. **Código muerto:**
+   `ditherChannel()` en [render/color.go:L46-L68](file:///d:/programacion/video-terminal/render/color.go#L46-L68) no se utiliza en ningún flujo de producción.
 
-Las preguntas que deben quedar respondidas:
-
-1. ¿Qué etapa consume más del presupuesto por frame?
-2. ¿El SyncWait es positivo (el video espera al audio) o negativo (el video se atrasa)?
-3. ¿El output.Flush es el cuello de botella en terminales lentos?
-4. ¿Hay allocations que escapan al heap (ver el GC counter)?
-
-Solo después de esto se toman decisiones de diseño concurrente.
-
----
-
-## Fase 3 — Rediseño concurrente (condicional a los hallazgos)
-
-Hay tres cuellos de botella posibles y cada uno tiene una solución distinta. No son mutuamente excluyentes, pero conviene implementarlos en orden de impacto.
-
-### 3A — Si el cuello es `Decode` (I/O bound)
-
-El `ReadFull` sobre el pipe de FFmpeg bloquea el goroutine principal mientras espera bytes. La solución es un **prefetch goroutine**:
-
-- Un goroutine dedicado solo a leer frames del decoder y enviarlo a un canal con profundidad 2.
-- El goroutine de procesamiento consume del canal.
-- Resultado: mientras se procesa el frame N, el decoder ya está leyendo el frame N+1 desde FFmpeg.
-- Profundidad del canal: máximo 2 frames (no más, para no adelantar al audio más de `2 / fps` segundos).
-
-Este cambio es el de menor riesgo y no afecta la lógica de sincronía ni de seek.
-
-### 3B — Si el cuello es `Dither` o `Quantize` (CPU bound)
-
-Dividir el pipeline en 3 etapas concurrentes con canales de profundidad 1:
-
-```
-Goroutine A: Decode → Resize
-Goroutine B: TemporalBlend → Scanline → Quantize → Dither → Map
-Goroutine C: Diff → Output
-```
-
-La profundidad 1 es intencional: permite que A y B se solapen en tiempo, pero no acumula frames que adelantarían el video al audio.
-
-El punto crítico aquí es la **propiedad del buffer**: cuando el goroutine A pasa un `WorkRGB` al canal hacia B, A no debe tocar ese buffer hasta que B haya terminado. Eso se resuelve con un pool explícito de 3 buffers (ver Fase 4).
-
-### 3C — Si el cuello es `Output.Flush` (I/O bound hacia stdout)
-
-Hacer el write asíncrono: el goroutine de procesamiento genera el slice `[]byte` con las secuencias ANSI y lo envía a un canal. Un goroutine escritor es el único que toca stdout y hace el `Flush`.
-
-Esto desacopla la generación de ANSI del tiempo de flush. El canal debe tener profundidad 1 — si stdout está lleno, el backpressure llega al procesador y este espera, lo cual es el comportamiento correcto (no tiene sentido generar frames que no se pueden mostrar).
-
-### 3D — Seek y resize en pipeline concurrente
-
-Este es el caso más delicado. El enfoque actual (cancelar el contexto y reiniciar el decoder) es correcto pero lento porque obliga a reiniciar FFmpeg. Con un pipeline concurrente hay goroutines bloqueados en canales que hay que drenar.
-
-El diseño recomendado: **mantener la cancelación de contexto** como mecanismo de reset, pero añadir un paso de drenado explícito. Cuando el contexto se cancela:
-
-1. Todos los goroutines del pipeline escuchan `ctx.Done()` y salen.
-2. El goroutine que inicia el seek espera a que todos los canales estén vacíos (puede usar un `sync.WaitGroup` o leer hasta EOF del canal antes de reiniciar).
-3. El decoder se reinicia con el nuevo offset.
-
-No intentar hacer seek "caliente" sin reiniciar FFmpeg — la complejidad no vale el beneficio para este caso de uso.
+### C. Diff, Memoria y Emisión ANSI
+7. **Asignaciones en el heap en el hot loop del Differ:**
+   En [diff/byte_differ.go:L45-L46](file:///d:/programacion/video-terminal/diff/byte_differ.go#L45-L46), cada corrida (`flush`) asigna un slice nuevo:
+   ```go
+   textCopy := make([]rune, len(d.runes)-runStartIdx)
+   copy(textCopy, d.runes[runStartIdx:])
+   ```
+   A 30–60 fps con cientos de cambios por frame, esto genera miles de allocations/segundo que saturan el Garbage Collector. Dado que el carácter es siempre `'▀'`, almacenar `[]rune` es redundante frente a un simple entero `RunLen int`.
+8. **Diff por igualdad binaria exacta y falta de Keyframe Refresh:**
+   Comparar RGB exacto (`cc != pc`) hace que el ruido de compresión o grano de cámara marque casi toda celda como cambiada, invalidando el ahorro del diff. Sin embargo, introducir un umbral sin **Keyframe Refresh** causará *drift* o *ghosting* acumulativo en el emulador del terminal.
+9. **Saturación del emulador de terminal (VTE):**
+   Con escenas en movimiento, miles de secuencias `\x1b[y;xH` y Truecolor individuales colapsan el parser del emulador antes de agotar el ancho de banda del socket local.
 
 ---
 
-## Fase 4 — Modelo de propiedad de buffers
+## 3. Matriz de Soluciones Priorizada (ROI)
 
-Con concurrencia, los buffers no pueden ser reutilizados libremente. El modelo actual ya tiene buffers reutilizables en `NearestResizer`, `BayerDither`, `TemporalBlend`, `ByteDiffer` — pero solo funciona porque hay un solo goroutine.
-
-Con el pipeline por etapas, cada etapa necesita sus propios buffers. El diseño más simple:
-
-- Pre-alocar un **pool de N slots** donde N = profundidad_canal + 1 (ej. 3 slots para canal de profundidad 1 + 1 en vuelo).
-- Cada slot contiene: `FrameRGB` + `WorkRGB` (×2 para double-buffer del temporal blend) + `CellGrid`.
-- Los slots circulan a través del pipeline: A toma el slot libre, lo llena, lo envía; B lo procesa, lo envía; C lo consume y lo devuelve al pool libre.
-- Implementar con un canal de "slots libres" de profundidad N — clásico y correcto.
-
-Esto elimina todas las allocations por frame una vez que el sistema está en régimen estacionario.
-
----
-
-## Fase 5 — Benchmarks y validación
-
-### 5.1 Benchmark sintético del pipeline completo
-
-Añadir `pipeline_bench_test.go` con un decoder mock que genera frames pre-generados en memoria (no FFmpeg). Mide el throughput de las etapas de procesamiento en aislamiento. Permite comparar antes/después de cualquier cambio sin depender de un archivo de video o de FFmpeg.
-
-### 5.2 Benchmark por etapa aislada
-
-Ya existen `BenchmarkBayerDitherQuality`, `BenchmarkScanlineCRT`, `BenchmarkTemporalBlend`. Agregar:
-
-- `BenchmarkBlockMapper` (MapInto)
-- `BenchmarkByteDiffer` (ya existe)
-- `BenchmarkANSIOutput` con un `io.Discard` como writer
-
-Ejecutar con `-benchmem` para detectar allocations que escapan al heap.
-
-### 5.3 Criterios de éxito
-
-Antes de cerrar cualquier cambio de concurrencia:
-
-- FPS sostenido ≥ target en el escenario base.
-- AV drift < 25ms en régimen estacionario.
-- Zero allocations por frame en las etapas de procesamiento (verificado con `-benchmem`).
-- Seek funcional y sin goroutine leaks (verificar con `goleak` o `runtime.NumGoroutine` antes/después).
-
----
-
-## Orden de ejecución recomendado
-
-1. Ring buffer + StageTimer | Sin esto, todo lo demás es adivinanza |
-2. Overlay `--profile` | Necesario para observar en tiempo real |
-3. Medir escenarios base | Define qué optimizar |
-4. Pool de buffers | Prerequisito de cualquier concurrencia |
-5. La 3A/B/C que corresponda | Basado en medición, no en suposición |
-6. Benchmarks sintéticos | Valida que el cambio tiene impacto real |
-7. Seek/resize en pipeline concurrente | Último porque es lo más propenso a race conditions |
+| Prioridad | Medida | Impacto Técnico | Coste / Consideraciones |
+| :--- | :--- | :--- | :--- |
+| **P0** | **Reescalado en FFmpeg** (`-vf scale=W:H:flags=area,fps=N`) — **COMPLETADO** | Reduce el I/O por pipe de ~180 MB/s a <1 MB/s. Delega antialiasing de alta calidad (`area`/`lanczos`) a libswscale. | Resuelto: FFmpeg escala a `TermW × (TermH*2)` directamente; si cambia la ventana, `NearestResizer` procesa la diferencia durante la sesión. |
+| **P0** | **Invertir/Integrar Dither y Cuantización** — **COMPLETADO** | Dithering matemáticamente correcto. Suprime posterización y gradientes escalonados. | Resuelto: se invirtió el orden en pipeline. El sesgo Bayer se aplica sobre colores continuos y luego se cuantiza a niveles discretos antes del Mapper. |
+| **P0** | **Eliminar allocations en `ByteDiffer`** — **COMPLETADO** | Zero-alloc en el render loop. Reduce drásticamente la latencia de GC. | Resuelto: se incorporó `RunLen int` en `DiffOp`, suprimiendo la asignación de slices `make([]rune)` en el differ; `ANSIOutput` emite el rune repetido. |
+| **P1** | **Diff con umbral perceptual + Keyframe Refresh** — **COMPLETADO** | Disminuye hasta un 70% los bytes emitidos al terminal en escenas complejas sin parpadeo. | Resuelto: comparación perceptual luma en `ByteDiffer`, barrido continuo de líneas (rolling refresh cada ~30 frames) y keyframe completo periódico (cada 120 frames); `prev` preserva el estado real del terminal sin drift. |
+| **P1** | **Preservación de Aspect Ratio** | Evita deformación de la imagen. | Calcular barras negras (letterbox/pillarbox) centradas dentro de `TermW × TermH`. |
+| **P1** | **Corrección de ANSI-256** | Mejora sustancial de contraste y fidelidad en terminales de 8 bits. | Usar redondeo correcto e indexar la rampa de grises (232–255) para píxeles monocromáticos/baja saturación. |
+| **P2** | **Salida optimizada de cursor y terminal** | Minimiza secuencias ANSI redundantes. | Si dos corridas están en la misma fila y la distancia es menor al coste de emitir `\x1b[y;xH`, emitir espacios o continuar la emisión. |
+| **P2** | **Protocolos gráficos nativos (Kitty / Sixel / iTerm2)** | Renderizado con fidelidad de píxel real sin caracteres de texto. | Requiere negociación de capacidades del terminal; no es universalmente compatible. |

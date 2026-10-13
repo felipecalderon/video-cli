@@ -26,11 +26,12 @@ type CellGrid struct {
 }
 
 type DiffOp struct {
-	X, Y int
-	FG   [3]uint8
-	BG   [3]uint8
-	Ch   rune
-	Text []rune
+	X, Y   int
+	FG     [3]uint8
+	BG     [3]uint8
+	Ch     rune
+	RunLen int
+	Text   []rune
 }
 
 type ColorMode uint8

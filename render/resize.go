@@ -37,6 +37,11 @@ func (r *NearestResizer) Resize(ctx context.Context, src types.FrameRGB, termW, 
 	}
 	pix := r.buf[:need]
 
+	if src.W == termW && src.H == workH && src.Stride == stride {
+		copy(pix, src.Pix[:need])
+		return types.WorkRGB{W: termW, H: workH, Stride: stride, Pix: pix}, nil
+	}
+
 	for y := 0; y < workH; y++ {
 		srcY := y * src.H / workH
 		for x := 0; x < termW; x++ {

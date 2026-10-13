@@ -79,6 +79,13 @@ func (o *ANSIOutput) Write(ctx context.Context, ops []types.DiffOp) error {
 			for _, r := range op.Text {
 				buf = appendRuneUTF8(buf, r)
 			}
+		} else if op.RunLen > 0 {
+			var rBuf [4]byte
+			n := utf8.EncodeRune(rBuf[:], op.Ch)
+			chBytes := rBuf[:n]
+			for i := 0; i < op.RunLen; i++ {
+				buf = append(buf, chBytes...)
+			}
 		} else {
 			buf = appendRuneUTF8(buf, op.Ch)
 		}

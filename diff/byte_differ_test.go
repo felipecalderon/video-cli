@@ -26,11 +26,17 @@ func TestByteDifferGroupsContiguousRuns(t *testing.T) {
 	if got, want := len(ops), 2; got != want {
 		t.Fatalf("unexpected op count: got %d want %d", got, want)
 	}
-	if got, want := string(ops[0].Text), "▀▀"; got != want {
-		t.Fatalf("unexpected first span text: got %q want %q", got, want)
+	if got, want := ops[0].RunLen, 2; got != want {
+		t.Fatalf("unexpected first span RunLen: got %d want %d", got, want)
 	}
-	if got, want := string(ops[1].Text), "▀▀"; got != want {
-		t.Fatalf("unexpected second span text: got %q want %q", got, want)
+	if got, want := ops[0].Ch, '▀'; got != want {
+		t.Fatalf("unexpected first span Ch: got %q want %q", got, want)
+	}
+	if got, want := ops[1].RunLen, 2; got != want {
+		t.Fatalf("unexpected second span RunLen: got %d want %d", got, want)
+	}
+	if got, want := ops[1].Ch, '▀'; got != want {
+		t.Fatalf("unexpected second span Ch: got %q want %q", got, want)
 	}
 }
 
